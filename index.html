@@ -162,6 +162,18 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
 .mprimary{background:var(--teal);color:#08120f;border:none}
 .msecondary{background:transparent;color:var(--muted)}
 .modalbox .warn{font-size:11px;color:var(--amber);margin-top:14px;line-height:1.55}
+body.viewer #uploadView{display:none!important}
+body.viewer #adminBtns{display:none!important}
+#vwait{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px}
+.qlist{max-height:430px;overflow:auto}
+.qlist::-webkit-scrollbar{width:8px}.qlist::-webkit-scrollbar-thumb{background:#26303f;border-radius:4px}
+.qitem{display:flex;align-items:flex-start;gap:14px;padding:11px 4px;border-bottom:1px solid var(--line)}
+.qitem:last-child{border:none}
+.qitem .cnt{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--teal);min-width:36px;text-align:right;padding-top:1px}
+.qitem .qx{flex:1;font-size:13.5px;color:var(--cream);line-height:1.45}
+.qitem .th{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 7px;white-space:nowrap;margin-top:1px}
+.qlist.gap .cnt{color:var(--amber)}
+.qempty{color:var(--faint);font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:34px 6px;text-align:center;line-height:1.6}
 </style>
 </head>
 <body>
@@ -188,7 +200,7 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
         <h1>KAI Chatbot <em>— Intelligence Report</em></h1>
         <div class="meta" id="meta"></div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;flex-wrap:wrap" id="adminBtns">
         <button class="reload" id="publishBtn" style="border-color:#3a3320;color:var(--gold)">⇪ Publish to GitHub</button>
         <button class="reload" id="ghSettings" title="GitHub settings" style="padding:10px 12px">⚙</button>
         <button class="reload" id="exportBtn" style="border-color:#2e4a3f;color:var(--teal)">⬇ Export summary</button>
@@ -210,6 +222,17 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
 </div>
 </div>
 
+<div class="modal" id="pwGate">
+  <div class="modalbox" style="max-width:380px;text-align:center">
+    <div style="font-size:34px;margin-bottom:4px">🔒</div>
+    <h3>KAI Dashboard</h3>
+    <p style="text-align:center">Enter the dashboard password to continue.</p>
+    <input id="pwInput" type="password" placeholder="Password" style="text-align:center" autocomplete="off">
+    <div id="pwErr" style="color:var(--coral);font-size:12px;min-height:16px;margin-top:8px;font-family:'IBM Plex Mono',monospace"></div>
+    <div class="modalbtns"><button class="mprimary" id="pwUnlock">Unlock</button></div>
+  </div>
+</div>
+
 <div class="modal" id="ghModal">
   <div class="modalbox">
     <h3>Publish to GitHub</h3>
@@ -222,7 +245,9 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
     <input id="ghPath" value="kai-data.json" autocomplete="off">
     <label>GitHub access token (fine-grained, Contents: Read &amp; write)</label>
     <input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
-    <div class="warn">⚠ The token is stored only in <b>this browser</b> (localStorage) and is never written into the published page. Use a fine-grained token scoped to just this one repository.</div>
+    <label>Dashboard password <span style="color:var(--faint)">(encrypts data for viewers — share with the team)</span></label>
+    <input id="ghPwData" type="password" placeholder="leave blank = no encryption" autocomplete="off">
+    <div class="warn">⚠ The token &amp; password are stored only in <b>this browser</b> and never written into the published page. The data file is encrypted with AES-256 before upload — without the password it's unreadable, even though the file is public.</div>
     <div class="modalbtns">
       <button class="msecondary" id="ghCancel">Cancel</button>
       <button class="mprimary" id="ghSave">Save &amp; Publish</button>
@@ -281,6 +306,11 @@ function parseDateFull(v){
 }
 function progKey(t){return /msc|m\.sc|master/.test(t)?"MSc Data Science & AI":/\bbs \b|bachelor|\bbsc\b|b\.sc|class 12|undergrad/.test(t)?"BS / BSc Data Science & AI":/generative|agentic|gen ai/.test(t)?"GenAI & Agentic AI Cert":/mlops|ai engineering/.test(t)?"AI Engineering & MLOps Cert":"Other / Unclear";}
 function anatKey(m){m=m.trim();return /msc|m\.sc|master/.test(m)?"MSc in Data Science & AI":/bachelor|\bbs\b|\bbsc\b|b\.sc/.test(m)?"BS / BSc in Data Science & AI":/generative|agentic|gen ai/.test(m)?"GenAI & Agentic AI Certificate":/mlops|ai engineering/.test(m)?"AI Engineering & MLOps Certificate":/^(hi|hey|hello|hu)\b/.test(m)?'"hi" / generic opener':"Other specific queries";}
+function isQuestion(u){const t=u.toLowerCase().trim();if(t.length<5)return false;if(u.includes("?"))return true;if(/^(what|how|when|where|which|who|whom|why|can|could|is|are|am|do|does|did|will|would|should|may|tell me|i want to know|i need to know|i wanted to know|i would like to know)\b/.test(t))return true;if(/\b(eligib|fee|fees|cost|scholarship|apply|application|admission|deadline|duration|placement|syllabus|curriculum|certificate|transcript|emi|installment|refund|recogni|valid|approved|accredit)\b/.test(t))return true;return false;}
+function scrubQ(s){s=s.replace(/[\w.+-]+@[\w.-]+\.\w+/g,"[email]").replace(/\b(?:\+?91[\-\s]?)?[6-9]\d{9}\b/g,"[phone]").replace(/\b\d{6,}\b/g,"[number]").replace(/https?:\/\/\S+/g,"[link]").replace(/\s+/g," ").trim();if(s.length>160)s=s.slice(0,158).trim()+"…";return s;}
+function validQ(s){return s.length>=8&&!/@/.test(s)&&!/\d{7,}/.test(s);}
+function noAnswer(a){if(!a)return false;const t=a.toLowerCase();return /\bi (do not|don't|cannot|can'?t|am not able to|am unable to|won'?t be able to)\s+(have|provide|share|give|answer|find|access|assist|help with)/.test(t)||/\bi (do not|don't) have (that|this|the|any|enough)\s+(information|details?|data)/.test(t)||/\b(outside my (knowledge|scope)|not available to me|beyond my (knowledge|scope|capabilit))/.test(t)||/\b(please (contact|reach out|connect)|reach out to (our|the)|connect you with (our|a|the)|kindly (contact|reach))\s*(our |the )?(team|counsel\w*|admission\w*|advisor|support|representative)/.test(t)||/\bi('?m| am) (not sure|unsure|not certain|afraid)/.test(t);}
+function extractQ(conv){const re=/(User|Agent):\s*([\s\S]*?)(?=(?:User|Agent):|$)/g;const parts=[];let m;while((m=re.exec(conv)))parts.push({r:m[1],t:m[2].trim()});const q=[],unq=[],seen=new Set();for(let i=0;i<parts.length;i++){if(parts[i].r!=="User")continue;const u=parts[i].t;if(!isQuestion(u))continue;const cq=scrubQ(u);if(!validQ(cq))continue;const key=cq.toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();if(seen.has(key))continue;seen.add(key);if(q.length<8)q.push(cq);const a=(parts[i+1]&&parts[i+1].r==="Agent")?parts[i+1].t:"";if(noAnswer(a)&&unq.length<8)unq.push(cq);}return{q,unq};}
 function rowToRecord(r){
   const conv=String(r["Full Conversation"]||""),summ=String(r["Summary"]||"");
   const t=(conv+" "+summ).toLowerCase(),convL=conv.toLowerCase();
@@ -288,6 +318,7 @@ function rowToRecord(r){
   const tp=(conv.match(/User:/g)||[]).length;
   const dt=parseDateFull(r["Chat Created At"]);
   const looped=(convL.split(GREET).length-1)>=2;
+  const qx=extractQ(conv);
   return{
     id:String(r["Chat ID"]||""),
     d:dt?dt.iso:null, h:dt?dt.h:0, tp, am,
@@ -296,6 +327,7 @@ function rowToRecord(r){
     intent:/callback|apply|application process/.test(t),
     looped, frustrated:/frustrat|abusive|abuse|inappropriate|loop|failed to|repeatedly|stalled|gatekeeping/.test(summ.toLowerCase()),
     prog:progKey(t), topics:TOPIC_KEYS.filter(k=>TP[k].test(t)), tok:Number(r["Total Tokens"])||0,
+    q:qx.q, unq:qx.unq,
     anat:am<=1?anatKey((conv.match(/User:\s*([\s\S]*?)\s+Agent:/)||conv.match(/User:\s*([\s\S]*)/)||["",""])[1].toLowerCase()):null
   };
 }
@@ -379,6 +411,7 @@ function renderInner(recs,range){
   paintHealth(o);
   paintKPIs(o,prev);paintBanner(o);paintFunnel(o);paintAnat(o);
   paintQuality(L,o);paintConvProg(L);paintSignals(L);
+  paintQuestions(questionPools(recs));
   paintBars("progBars",sortObj(o.prog),[C.teal,C.blue,C.amber,C.coral,C.muted],o.n,false);
   paintBars("topicBars",sortObj(o.topics),null,o.n,true);
   donut("todChart",o.hourly,o.n);hourChart(o.hourly);dayChart(o.daily);leadTrend(L.dailyLead);paintFM(o);
@@ -406,7 +439,11 @@ function template(){return `
     </div></section>
   <section><div class="shead"><span class="n">04</span><h2>Programme demand</h2></div><div class="panel"><div id="progBars"></div></div></section>
   <section><div class="shead"><span class="n">05</span><h2>What users actually ask about</h2></div><div class="panel"><div id="topicBars"></div></div></section>
-  <section><div class="shead"><span class="n">06</span><h2>When they come</h2></div>
+  <section><div class="shead"><span class="n">06</span><h2>Questions students are asking</h2></div>
+    <div class="panel"><div class="cap">Mined from the full chat transcripts — most-asked first. Contact details are stripped out. <b id="qAskMeta" style="color:var(--muted)"></b></div><div class="qlist" id="qAsk"></div></div></section>
+  <section><div class="shead"><span class="n">07</span><h2>Questions the bot couldn't answer</h2></div>
+    <div class="panel"><div class="cap">Where the bot said it didn't know or sent the student to a human — your knowledge-base to-do list. <b id="qGapMeta" style="color:var(--muted)"></b></div><div class="qlist gap" id="qGap"></div></div></section>
+  <section><div class="shead"><span class="n">08</span><h2>When they come</h2></div>
     <div class="grid3">
       <div class="panel"><h4>Time-of-day mix</h4><div class="cap">Share of conversations by daypart.</div><div id="todChart"></div></div>
       <div class="panel"><h4>Hourly volume</h4><div class="cap">Conversations by hour (hover for counts).</div><div id="hourChart"></div></div>
@@ -416,7 +453,7 @@ function template(){return `
       <div class="panel"><h4>Lead-capture trend</h4><div class="cap">Daily capture rate — is the bot improving?</div><div id="trendChart"></div></div>
     </div>
   </section>
-  <section><div class="shead"><span class="n">07</span><h2>Revenue &amp; recovery calculator</h2></div>
+  <section><div class="shead"><span class="n">09</span><h2>Revenue &amp; recovery calculator</h2></div>
     <div class="panel"><div class="cap" style="margin-bottom:18px">Turn the funnel into rupees. Enter your assumptions — everything recomputes live.</div>
       <div class="calc">
         <div class="calcin">
@@ -430,7 +467,7 @@ function template(){return `
         </div>
         <div class="calcout" id="calcOut"></div>
       </div></div></section>
-  <section><div class="shead"><span class="n">08</span><h2>Quality &amp; failure modes</h2></div><div class="fm" id="fm"></div></section>`;}
+  <section><div class="shead"><span class="n">10</span><h2>Quality &amp; failure modes</h2></div><div class="fm" id="fm"></div></section>`;}
 
 function sortObj(obj){return Object.entries(obj).sort((a,b)=>b[1]-a[1]);}
 function pctOf(a,n){return n?Math.round(a/n*100):0;}
@@ -612,7 +649,24 @@ function leadTrend(dailyLead){
   $("trendChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${lab}<defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.green}" stop-opacity=".35"/><stop offset="1" stop-color="${C.green}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#tg)"/><polyline points="${pts}" fill="none" stroke="${C.green}" stroke-width="2"/>${dots}</svg>`;
 }
 
-/* ===== revenue & recovery calculator ===== */
+/* ===== question pools (mined from transcripts) ===== */
+function questionPools(recs){
+  const ask=new Map(),un=new Map();
+  const add=(map,q)=>{const k=q.toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();if(k.length<4)return;const e=map.get(k)||{t:q,n:0};e.n++;if(q.length>e.t.length)e.t=q;map.set(k,e);};
+  recs.forEach(r=>{(r.q||[]).forEach(q=>add(ask,q));(r.unq||[]).forEach(q=>add(un,q));});
+  const top=m=>[...m.values()].sort((a,b)=>b.n-a.n);
+  return{ask:top(ask),un:top(un)};
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function themeOf(q){const t=q.toLowerCase();for(const k of TOPIC_KEYS){if(TP[k].test(t))return k.split(" ")[0].replace("&","");}return "General";}
+function qrow(e){return `<div class="qitem"><span class="cnt">${e.n}×</span><span class="qx">${esc(e.t)}</span><span class="th">${themeOf(e.t)}</span></div>`;}
+function paintQuestions(Q){
+  const a=Q.ask.slice(0,30),u=Q.un.slice(0,25);
+  $("qAsk").innerHTML=a.length?a.map(qrow).join(""):`<div class="qempty">No question data in this range yet.<br>Re-publish from a full export to mine the transcripts.</div>`;
+  $("qAskMeta").textContent=a.length?`top ${a.length} of ${Q.ask.length} distinct`:"";
+  $("qGap").innerHTML=u.length?u.map(qrow).join(""):`<div class="qempty">No unanswered questions detected in this range. 🎉</div>`;
+  $("qGapMeta").textContent=u.length?`top ${u.length} of ${Q.un.length} gaps`:"";
+}
 function daysInRange(range){return Math.max(1,Math.round((new Date(range[1])-new Date(range[0]))/864e5)+1);}
 function inr(v){return "₹"+Math.round(v).toLocaleString("en-IN");}
 function lakh(v){return v>=1e7?"₹"+(v/1e7).toFixed(2)+" Cr":v>=1e5?"₹"+(v/1e5).toFixed(2)+" L":"₹"+Math.round(v).toLocaleString("en-IN");}
@@ -648,10 +702,12 @@ function renderCalc(){
   $("calcAssum").innerHTML=`Based on ${o.lead} leads over ${days} day(s) in range → annualised. Recoverable pool = ${pool} intent-rich drop-offs + loops, recovered at ${CALC.recover}% and converting at your past-intake capture rate (${Math.round(engRate*100)}%). All figures are planning estimates from your assumptions.`;
 }
 
-function shareExport(){
+async function shareExport(){
   if(!RECORDS.length)return;
-  const payload={version:2,generatedAt:new Date().toISOString(),sourceName:SRC||"export",records:RECORDS};
-  const blob=new Blob([JSON.stringify(payload)],{type:"application/json"});
+  const payload={version:3,generatedAt:new Date().toISOString(),sourceName:SRC||"export",records:RECORDS};
+  const c=getCfg();
+  const out=c.dataPw?await encEnvelope(payload,c.dataPw):payload;
+  const blob=new Blob([JSON.stringify(out)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kai-data.json";a.click();
 }
 $("exportBtn").onclick=shareExport;
@@ -673,13 +729,13 @@ $("publishBtn").onclick=()=>{
 };
 function openGhModal(){
   const c=getCfg();
-  $("ghRepo").value=c.repo||"";$("ghBranch").value=c.branch||"main";$("ghPath").value=c.path||"kai-data.json";$("ghToken").value=c.token||"";
+  $("ghRepo").value=c.repo||"";$("ghBranch").value=c.branch||"main";$("ghPath").value=c.path||"kai-data.json";$("ghToken").value=c.token||"";$("ghPwData").value=c.dataPw||"";
   $("ghModal").classList.add("show");
 }
 $("ghCancel").onclick=()=>$("ghModal").classList.remove("show");
 $("ghSettings").onclick=openGhModal;
 $("ghSave").onclick=()=>{
-  const c={repo:$("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,""),branch:$("ghBranch").value.trim()||"main",path:$("ghPath").value.trim()||"kai-data.json",token:$("ghToken").value.trim()};
+  const c={repo:$("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,""),branch:$("ghBranch").value.trim()||"main",path:$("ghPath").value.trim()||"kai-data.json",token:$("ghToken").value.trim(),dataPw:$("ghPwData").value};
   if(!/^[^/]+\/[^/]+$/.test(c.repo)){ghStatus("Repository must look like owner/name.","err");return;}
   if(!c.token){ghStatus("A GitHub token is required.","err");return;}
   setCfg(c);$("ghModal").classList.remove("show");ghPublish();
@@ -693,20 +749,29 @@ async function ghPublish(){
   let sha=null,existing=[];
   try{
     const g=await fetch(url+`?ref=${encodeURIComponent(c.branch)}`,{headers:H});
-    if(g.ok){const j=await g.json();sha=j.sha;try{existing=(JSON.parse(unb64(j.content.replace(/\n/g,""))).records)||[];}catch(e){}}
+    if(g.ok){
+      const j=await g.json();sha=j.sha;
+      let obj=null;try{obj=JSON.parse(unb64(j.content.replace(/\n/g,"")));}catch(e){}
+      if(obj&&obj.enc){
+        if(!c.dataPw){ghStatus("Existing data is encrypted — set the dashboard password in ⚙ settings to update it.","err");return;}
+        try{existing=(await decEnvelope(obj,c.dataPw)).records||[];}
+        catch(e){ghStatus("The saved password can't decrypt the live data. Fix it in ⚙ settings.","err");return;}
+      } else if(obj){existing=obj.records||[];}
+    }
     else if(g.status===401){ghStatus("Token rejected (401). Check it has Contents: Read & write on this repo.","err");return;}
-    else if(g.status===404){/* file or repo not there yet — will create */}
   }catch(e){ghStatus("Network error reaching GitHub.","err");return;}
   const merged=mergeRecords(existing,RECORDS);
   const payload={version:3,generatedAt:new Date().toISOString(),sourceName:SRC||"daily update",records:merged};
-  const body={message:`KAI data ${new Date().toISOString().slice(0,16).replace("T"," ")} — ${merged.length} conversations`,content:b64(JSON.stringify(payload)),branch:c.branch};
+  const fileObj=c.dataPw?await encEnvelope(payload,c.dataPw):payload;
+  const body={message:`KAI data ${new Date().toISOString().slice(0,16).replace("T"," ")} — ${merged.length} conversations${c.dataPw?" (encrypted)":""}`,content:b64(JSON.stringify(fileObj)),branch:c.branch};
   if(sha)body.sha=sha;
   ghStatus(`Publishing… writing ${merged.length} conversations`,"busy");
   try{
     const put=await fetch(url,{method:"PUT",headers:{...H,"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(put.ok){
       RECORDS=merged;PUBLISHED=payload.generatedAt;SRC=payload.sourceName;
-      ghStatus(`✓ Published — ${merged.length} conversations now live. Team link refreshes within ~1 minute.`,"ok");
+      if(c.dataPw){try{sessionStorage.setItem("kai_pw",c.dataPw);}catch(_){}}
+      ghStatus(`✓ Published — ${merged.length} conversations now live${c.dataPw?", encrypted":""}. Team link refreshes within ~1 minute.`,"ok");
       boot();
     }else if(put.status===404){ghStatus("Repo or branch not found (404). Check owner/name and branch.","err");}
     else if(put.status===401||put.status===403){ghStatus(`Token lacks write access (${put.status}). Needs Contents: Read & write on this repo.`,"err");}
@@ -715,15 +780,48 @@ async function ghPublish(){
   }catch(e){ghStatus("Network error during publish.","err");}
 }
 
-async function tryAutoLoad(){
-  try{
-    const r=await fetch("./kai-data.json",{cache:"no-store"});
-    if(!r.ok)return;
-    const j=await r.json();
-    if(j&&j.records){RECORDS=j.records.filter(x=>x.d);SRC=j.sourceName||"published data";PUBLISHED=j.generatedAt;boot();}
-  }catch(e){}
+const ADMIN=/[?&]admin\b/i.test(location.search)||/\badmin\b/i.test(location.hash);
+document.body.classList.toggle("viewer",!ADMIN);
+
+/* ===== encryption (AES-256-GCM via Web Crypto) ===== */
+function ab2b64(buf){let s="";const a=new Uint8Array(buf);for(let i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+function b642ab(b){const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+async function deriveKey(pw,salt){const km=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);}
+async function encEnvelope(obj,pw){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));const key=await deriveKey(pw,salt);const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(JSON.stringify(obj)));return{enc:true,v:1,salt:ab2b64(salt),iv:ab2b64(iv),ct:ab2b64(ct),generatedAt:obj.generatedAt,count:(obj.records||[]).length};}
+async function decEnvelope(env,pw){const key=await deriveKey(pw,b642ab(env.salt));const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b642ab(env.iv)},key,b642ab(env.ct));return JSON.parse(new TextDecoder().decode(pt));}
+function getDataPw(){try{return sessionStorage.getItem("kai_pw")||getCfg().dataPw||null;}catch(e){return getCfg().dataPw||null;}}
+function applyData(j){RECORDS=(j.records||[]).filter(x=>x.d);SRC=j.sourceName||"published data";PUBLISHED=j.generatedAt;boot();}
+
+async function init(){
+  let raw=null;
+  try{const r=await fetch("./kai-data.json",{cache:"no-store"});if(r.ok)raw=await r.json();}catch(e){}
+  if(!raw){ if(ADMIN)$("uploadView").style.display="flex"; else showWait(); return; }
+  if(raw.enc){
+    const pw=getDataPw();
+    if(pw){ try{applyData(await decEnvelope(raw,pw));return;}catch(e){ try{sessionStorage.removeItem("kai_pw");}catch(_){} } }
+    if(ADMIN){ $("uploadView").style.display="flex"; return; }   // admin works from a fresh upload
+    showGate(raw);
+  } else { applyData(raw); }
 }
-document.addEventListener("DOMContentLoaded",tryAutoLoad);
+function showGate(env){
+  $("uploadView").style.display="none";$("reportView").style.display="none";
+  $("pwGate").classList.add("show");
+  const submit=async()=>{
+    const pw=$("pwInput").value; if(!pw)return;
+    $("pwErr").textContent="Checking…";
+    try{const j=await decEnvelope(env,pw);try{sessionStorage.setItem("kai_pw",pw);}catch(_){}$("pwGate").classList.remove("show");applyData(j);}
+    catch(e){$("pwErr").textContent="Incorrect password.";}
+  };
+  $("pwUnlock").onclick=submit;
+  $("pwInput").onkeydown=e=>{if(e.key==="Enter")submit();};
+  setTimeout(()=>$("pwInput").focus(),60);
+}
+function showWait(){
+  $("uploadView").style.display="none";$("reportView").style.display="none";
+  if($("vwait"))return;
+  document.body.insertAdjacentHTML("beforeend",`<div id="vwait"><div><div class="tag" style="color:var(--gold)">KAI Dashboard · BITS Pilani Digital</div><h1 style="font-family:'Fraunces',serif;font-weight:900;font-size:clamp(28px,5vw,40px);margin:14px 0 10px;letter-spacing:-1px">No data published yet</h1><p style="color:var(--muted);max-width:460px;margin:0 auto">The dashboard will appear here as soon as the latest chat data is published. Please check back shortly.</p></div></div>`);
+}
+document.addEventListener("DOMContentLoaded",init);
 </script>
 </body>
 </html>
