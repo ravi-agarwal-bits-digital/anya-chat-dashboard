@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Anya Chatbot Analyzer</title>
+<title>KAI Chatbot Analyzer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -147,6 +147,21 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
 .assum{font-size:11px;color:var(--faint);margin-top:16px;font-family:'IBM Plex Mono',monospace;line-height:1.6}
 @media(max-width:860px){.hero{grid-template-columns:1fr;text-align:center}.hero .gaugewrap{margin:0 auto}.calc{grid-template-columns:1fr}.qrow{grid-template-columns:1fr 1fr}}
 @media(max-width:860px){.wrap{padding:0 16px 60px}.strip{grid-template-columns:repeat(2,1fr)}.grid2,.grid3{grid-template-columns:1fr}.fm{grid-template-columns:1fr}.anat{grid-template-columns:1fr}.rangeinfo{margin-left:0;text-align:left;width:100%}}
+#ghStatus{font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:10px;min-height:16px}
+#ghStatus.ok{color:var(--teal)}#ghStatus.err{color:var(--coral)}#ghStatus.busy{color:var(--muted)}
+.modal{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modalbox{background:#141b27;border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:100%;box-shadow:0 30px 80px -20px #000}
+.modalbox h3{font-family:'Fraunces',serif;font-size:22px;margin-bottom:6px}
+.modalbox>p{color:var(--muted);font-size:13px;margin-bottom:8px}
+.modalbox label{display:block;font-size:12.5px;color:var(--cream);margin:13px 0 5px}
+.modalbox input{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--cream);padding:10px 12px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:13px}
+.modalbox input:focus{outline:none;border-color:var(--teal)}
+.modalbtns{display:flex;gap:10px;margin-top:22px}
+.modalbtns button{flex:1;padding:11px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--line)}
+.mprimary{background:var(--teal);color:#08120f;border:none}
+.msecondary{background:transparent;color:var(--muted)}
+.modalbox .warn{font-size:11px;color:var(--amber);margin-top:14px;line-height:1.55}
 </style>
 </head>
 <body>
@@ -154,7 +169,7 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
 
 <div id="uploadView">
   <div class="tag">BITS Pilani Digital · Internal Tool</div>
-  <h1>Anya Chatbot <em>Analyzer</em></h1>
+  <h1>KAI Chatbot <em>Analyzer</em></h1>
   <p class="lead">Drop in the vendor's chat export and explore the full intelligence report — filter by any date range, see drop-off, demand, topics and failure modes. Everything runs in your browser; nothing is uploaded.</p>
   <div class="drop" id="dropZone">
     <div class="ic">📊</div><b>Drop the Excel here</b>
@@ -170,14 +185,17 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
     <div class="htop">
       <div>
         <div class="tag">Independent Analysis · Generated In-Browser</div>
-        <h1>Anya Chatbot <em>— Intelligence Report</em></h1>
+        <h1>KAI Chatbot <em>— Intelligence Report</em></h1>
         <div class="meta" id="meta"></div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="reload" id="exportBtn" style="border-color:#2e4a3f;color:var(--teal)">⬇ Export shareable summary</button>
+        <button class="reload" id="publishBtn" style="border-color:#3a3320;color:var(--gold)">⇪ Publish to GitHub</button>
+        <button class="reload" id="ghSettings" title="GitHub settings" style="padding:10px 12px">⚙</button>
+        <button class="reload" id="exportBtn" style="border-color:#2e4a3f;color:var(--teal)">⬇ Export summary</button>
         <button class="reload" id="reloadBtn">↻ Load another file</button>
       </div>
     </div>
+    <div id="ghStatus"></div>
     <div class="filterbar">
       <div class="presets" id="presets"></div>
       <div class="custom" id="custom">
@@ -190,6 +208,26 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
   <div id="reportBody"></div>
   <footer id="foot"></footer>
 </div>
+</div>
+
+<div class="modal" id="ghModal">
+  <div class="modalbox">
+    <h3>Publish to GitHub</h3>
+    <p>Pushes the data file straight to your repo so the team's link updates — no download or upload screen.</p>
+    <label>Repository (owner/name)</label>
+    <input id="ghRepo" placeholder="yourname/kai-dashboard" autocomplete="off">
+    <label>Branch</label>
+    <input id="ghBranch" value="main" autocomplete="off">
+    <label>Data file path</label>
+    <input id="ghPath" value="kai-data.json" autocomplete="off">
+    <label>GitHub access token (fine-grained, Contents: Read &amp; write)</label>
+    <input id="ghToken" type="password" placeholder="github_pat_…" autocomplete="off">
+    <div class="warn">⚠ The token is stored only in <b>this browser</b> (localStorage) and is never written into the published page. Use a fine-grained token scoped to just this one repository.</div>
+    <div class="modalbtns">
+      <button class="msecondary" id="ghCancel">Cancel</button>
+      <button class="mprimary" id="ghSave">Save &amp; Publish</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -251,6 +289,7 @@ function rowToRecord(r){
   const dt=parseDateFull(r["Chat Created At"]);
   const looped=(convL.split(GREET).length-1)>=2;
   return{
+    id:String(r["Chat ID"]||""),
     d:dt?dt.iso:null, h:dt?dt.h:0, tp, am,
     lead:/submitted successfully|mobile number:\s*\d/.test(t),
     callback:/preferred callback date/.test(t),
@@ -528,7 +567,7 @@ function paintHealth(o){
     <text x="${cx}" y="${cy+22}" text-anchor="middle" fill="${C.muted}" font-family="IBM Plex Mono" font-size="10">FUNNEL HEALTH</text>
     <text x="${cx}" y="${cy+44}" text-anchor="middle" fill="${col}" font-family="Fraunces" font-size="22" font-weight="900">${g}</text></svg>`;
   $("heroText").innerHTML=`<h3>Funnel Health Score</h3><div class="verdict">${verdict}</div>
-    <p>A single read on how well Anya turns visitors into captured leads in this range — blending capture rate, how many get past the intake wall, and freedom from greeting-loops. Lift the drop-off and this climbs fast.</p>
+    <p>A single read on how well KAI turns visitors into captured leads in this range — blending capture rate, how many get past the intake wall, and freedom from greeting-loops. Lift the drop-off and this climbs fast.</p>
     <span class="gradechip" style="color:${col}">GRADE ${g} · ${s}/100</span>`;
 }
 function convBar(id,rows){ // rows: [label, lead, total]
@@ -613,13 +652,72 @@ function shareExport(){
   if(!RECORDS.length)return;
   const payload={version:2,generatedAt:new Date().toISOString(),sourceName:SRC||"export",records:RECORDS};
   const blob=new Blob([JSON.stringify(payload)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="Anya-data.json";a.click();
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="kai-data.json";a.click();
 }
 $("exportBtn").onclick=shareExport;
 
+/* ===== publish to GitHub (one-click daily update) ===== */
+function ghStatus(msg,cls){const e=$("ghStatus");if(!e)return;e.textContent=msg;e.className=cls||"";}
+function getCfg(){try{return JSON.parse(localStorage.getItem("kai_gh")||"{}");}catch(e){return{};}}
+function setCfg(c){try{localStorage.setItem("kai_gh",JSON.stringify(c));}catch(e){}}
+function b64(s){return btoa(unescape(encodeURIComponent(s)));}
+function unb64(s){try{return decodeURIComponent(escape(atob(s)));}catch(e){return atob(s);}}
+function recKey(r){return r.id||`${r.d}|${r.h}|${r.tp}|${r.tok}`;}
+function mergeRecords(existing,incoming){
+  const m=new Map();(existing||[]).forEach(r=>m.set(recKey(r),r));incoming.forEach(r=>m.set(recKey(r),r));
+  return[...m.values()];
+}
+$("publishBtn").onclick=()=>{
+  const c=getCfg();
+  if(c.repo&&c.token){ghPublish();} else {openGhModal();}
+};
+function openGhModal(){
+  const c=getCfg();
+  $("ghRepo").value=c.repo||"";$("ghBranch").value=c.branch||"main";$("ghPath").value=c.path||"kai-data.json";$("ghToken").value=c.token||"";
+  $("ghModal").classList.add("show");
+}
+$("ghCancel").onclick=()=>$("ghModal").classList.remove("show");
+$("ghSettings").onclick=openGhModal;
+$("ghSave").onclick=()=>{
+  const c={repo:$("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,""),branch:$("ghBranch").value.trim()||"main",path:$("ghPath").value.trim()||"kai-data.json",token:$("ghToken").value.trim()};
+  if(!/^[^/]+\/[^/]+$/.test(c.repo)){ghStatus("Repository must look like owner/name.","err");return;}
+  if(!c.token){ghStatus("A GitHub token is required.","err");return;}
+  setCfg(c);$("ghModal").classList.remove("show");ghPublish();
+};
+async function ghPublish(){
+  if(!RECORDS.length){ghStatus("Load a file first.","err");return;}
+  const c=getCfg();const[owner,repo]=c.repo.split("/");
+  const url=`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(c.path).replace(/%2F/g,"/")}`;
+  const H={Authorization:`Bearer ${c.token}`,Accept:"application/vnd.github+json"};
+  ghStatus("Publishing… reading current data","busy");
+  let sha=null,existing=[];
+  try{
+    const g=await fetch(url+`?ref=${encodeURIComponent(c.branch)}`,{headers:H});
+    if(g.ok){const j=await g.json();sha=j.sha;try{existing=(JSON.parse(unb64(j.content.replace(/\n/g,""))).records)||[];}catch(e){}}
+    else if(g.status===401){ghStatus("Token rejected (401). Check it has Contents: Read & write on this repo.","err");return;}
+    else if(g.status===404){/* file or repo not there yet — will create */}
+  }catch(e){ghStatus("Network error reaching GitHub.","err");return;}
+  const merged=mergeRecords(existing,RECORDS);
+  const payload={version:3,generatedAt:new Date().toISOString(),sourceName:SRC||"daily update",records:merged};
+  const body={message:`KAI data ${new Date().toISOString().slice(0,16).replace("T"," ")} — ${merged.length} conversations`,content:b64(JSON.stringify(payload)),branch:c.branch};
+  if(sha)body.sha=sha;
+  ghStatus(`Publishing… writing ${merged.length} conversations`,"busy");
+  try{
+    const put=await fetch(url,{method:"PUT",headers:{...H,"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(put.ok){
+      RECORDS=merged;PUBLISHED=payload.generatedAt;SRC=payload.sourceName;
+      ghStatus(`✓ Published — ${merged.length} conversations now live. Team link refreshes within ~1 minute.`,"ok");
+      boot();
+    }else if(put.status===404){ghStatus("Repo or branch not found (404). Check owner/name and branch.","err");}
+    else if(put.status===401||put.status===403){ghStatus(`Token lacks write access (${put.status}). Needs Contents: Read & write on this repo.`,"err");}
+    else if(put.status===409){ghStatus("Conflict (409) — someone else just updated it. Click Publish again.","err");}
+    else{const t=await put.text();ghStatus(`Publish failed (${put.status}). ${t.slice(0,100)}`,"err");}
+  }catch(e){ghStatus("Network error during publish.","err");}
+}
+
 async function tryAutoLoad(){
   try{
-    const r=await fetch("./Anya-data.json",{cache:"no-store"});
+    const r=await fetch("./kai-data.json",{cache:"no-store"});
     if(!r.ok)return;
     const j=await r.json();
     if(j&&j.records){RECORDS=j.records.filter(x=>x.d);SRC=j.sourceName||"published data";PUBLISHED=j.generatedAt;boot();}
