@@ -290,16 +290,16 @@ html{scroll-padding-top:96px}body{background:linear-gradient(180deg,#f7f9fc 0%,#
           <div class="side-sub">Digital Intelligence</div>
         </div>
         <nav class="side-nav">
-          <a class="side-link active" href="#sec-management"><span>∑</span>Summary</a>
-          <a class="side-link" href="#sec-action"><span>!</span>Action Queue</a>
-          <a class="side-link" href="#sec-overview"><span>⌂</span>Overview</a>
-          <a class="side-link" href="#sec-gap"><span>◌</span>Answer Gap</a>
-          <a class="side-link" href="#sec-funnel"><span>↘</span>Funnel</a>
-          <a class="side-link" href="#sec-questions"><span>?</span>Questions</a>
-          <a class="side-link" href="#sec-leads"><span>★</span>Leads</a>
-          <a class="side-link" href="#sec-callbacks"><span>☎</span>Callbacks</a>
-          <a class="side-link" href="#sec-volume"><span>▥</span>Rhythm</a>
-          <a class="side-link" href="#sec-explorer"><span>▤</span>Explorer</a>
+          <a class="side-link active" href="#sec-management" data-target="sec-management"><span>∑</span>Summary</a>
+          <a class="side-link" href="#sec-action" data-target="sec-action"><span>!</span>Action Queue</a>
+          <a class="side-link" href="#sec-overview" data-target="sec-overview"><span>⌂</span>Overview</a>
+          <a class="side-link" href="#sec-gap" data-target="sec-gap"><span>◌</span>Answer Gap</a>
+          <a class="side-link" href="#sec-funnel" data-target="sec-funnel"><span>↘</span>Funnel</a>
+          <a class="side-link" href="#sec-questions" data-target="sec-questions"><span>?</span>Questions</a>
+          <a class="side-link" href="#sec-leads" data-target="sec-leads"><span>★</span>Leads</a>
+          <a class="side-link" href="#sec-callbacks" data-target="sec-callbacks"><span>☎</span>Callbacks</a>
+          <a class="side-link" href="#sec-volume" data-target="sec-volume"><span>▥</span>Rhythm</a>
+          <a class="side-link" href="#sec-explorer" data-target="sec-explorer"><span>▤</span>Explorer</a>
         </nav>
         <div class="side-signature" aria-label="BITS Pilani legacy, Digital intelligence">
           <i></i>
@@ -1012,17 +1012,35 @@ function syncChatShellNav(){
   const links=[...document.querySelectorAll('.side-link')];
   const sections=[...document.querySelectorAll('#report section[id]')];
   if(!links.length||!sections.length)return;
-  const setActive=id=>links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
+  const targetOf=a=>(a.dataset.target||String(a.getAttribute('href')||'').replace(/^#/,''));
+  const cleanHash=()=>{try{if(location.hash)history.replaceState(null,document.title,location.pathname+location.search);}catch(e){}};
+  const setActive=id=>links.forEach(a=>a.classList.toggle('active',targetOf(a)===id));
+  if(!window.__chatNavClickBound){
+    window.__chatNavClickBound=true;
+    links.forEach(a=>a.addEventListener('click',e=>{
+      const id=targetOf(a),target=id?document.getElementById(id):null;
+      if(!target)return;
+      e.preventDefault();
+      setActive(id);
+      const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'});
+      cleanHash();
+    }));
+  }
   if(!window.__chatNavScrollBound){
     window.__chatNavScrollBound=true;
     window.addEventListener('scroll',()=>{
-      let current=sections[0]?.id;
+      const liveSections=[...document.querySelectorAll('#report section[id]')];
+      if(!liveSections.length)return;
+      let current=liveSections[0]?.id;
       const y=window.scrollY+160;
-      sections.forEach(s=>{if(s.offsetTop<=y)current=s.id;});
+      liveSections.forEach(s=>{if(s.offsetTop<=y)current=s.id;});
       if(current)setActive(current);
+      cleanHash();
     },{passive:true});
   }
   setActive(sections[0].id);
+  cleanHash();
 }
 
 function renderMethod(){
