@@ -542,6 +542,14 @@ const PROGRAMS=[
   ['Business / MBA',/\bmba|business analytics|management/i],
   ['Cyber / Software',/cyber|software|computer science|\bcs\b/i],
 ];
+const OUTCOMES={
+  CALLBACK:'Callback requested',
+  CONTACT:'Contact captured, no callback request',
+  GATE:'Left at the details gate',
+  RECOVERY:'High-intent, no contact captured',
+  ENGAGED:'Engaged then exited (no contact)',
+  LOW:'Low-engagement exit'
+};
 function tagThemes(t){const o=[];for(const[l,re]of THEMES)if(re.test(t))o.push(l);return o;}
 function tagPrograms(t){const o=[];for(const[l,re]of PROGRAMS)if(re.test(t))o.push(l);return o;}
 function levelOf(t){if(/\bmsc|m\.sc|mtech|m\.tech|master|post.?grad|\bpg\b/i.test(t))return'PG';if(/\bbsc|b\.sc|\bbs\b|bachelor|undergrad|\bug\b|class 12|12th/i.test(t))return'UG';return null;}
@@ -609,15 +617,15 @@ function buildRecords(rows){
     const programs=tagPrograms(blob),level=levelOf(blob);
     const engaged=meaningfulUserMessages>=2||exchangeCount>=2;
     const bounce=!engaged&&meaningfulUserMessages<=1;
-    const highIntent=!contactCaptured&&(explicitCallbackIntent||questions.length>=2||meaningfulUserMessages>=3||(programs.length>0&&questions.length>0));
+    const highIntent=!contactCaptured&&(explicitCallbackIntent||meaningfulUserMessages>=3||repeated>0||(programs.length>0&&questions.length>0)||questions.some(q=>q.themes.some(th=>['Fees / cost','Scholarship / EMI','Eligibility','How to apply','Placement / jobs','Recognition / validity'].includes(th))));
 
     let outcome;
-    if(callbackBooked)outcome='Callback requested';
-    else if(contactCaptured)outcome='Contact captured, no callback request';
-    else if(bounce)outcome='Low-engagement exit';
-    else if(lastAgentLow.includes(GATE))outcome='Left at the details gate';
-    else if(highIntent)outcome='High-intent, no contact captured';
-    else outcome='Engaged then exited (no contact)';
+    if(callbackBooked)outcome=OUTCOMES.CALLBACK;
+    else if(contactCaptured)outcome=OUTCOMES.CONTACT;
+    else if(lastAgentLow.includes(GATE))outcome=OUTCOMES.GATE;
+    else if(bounce)outcome=OUTCOMES.LOW;
+    else if(highIntent)outcome=OUTCOMES.RECOVERY;
+    else outcome=OUTCOMES.ENGAGED;
 
     built.push({
       idx:i,id:chatId,title:String(r["Title"]||'(untitled)'),
@@ -892,20 +900,30 @@ function secCallbacks(){
 
 /* 08 drop-offs */
 function secDropoff(){
-  const cats=['Converted — callback requested','Contact captured, no callback','Engaged then dropped (no contact)','Left at the details gate','Bounced after one reply'];
-  const reason={
-    'Converted — callback requested':['var(--navy)','Reached the goal. Nothing to fix — replicate what worked.'],
-    'Contact captured, no callback':['#247858','You have their details but no callback — prime for proactive follow-up.'],
-    'Engaged then dropped (no contact)':['var(--amber)','Interested enough to talk, but left before sharing details. Often unanswered questions or asking for details too early.'],
-    'Left at the details gate':['var(--coral)','Last thing they saw was the "share your details" prompt. The gate itself is the exit — answer first, ask later.'],
-    'Bounced after one reply':['var(--cold)','One Anya reply, then gone. Weak opener or the first reply was the intake gate.']
-  };
-  const counts={};cats.forEach(c=>counts[c]=0);VIEW.forEach(r=>counts[r.outcome]++);
-  const n=VIEW.length,mx=Math.max(1,...cats.map(c=>counts[c]));
-  const bars=cats.map(c=>`<div class="bar clk" data-drill="drop" data-arg="${esc(c)}" style="margin-bottom:18px"><div class="top"><span class="nm">${esc(c)}</span><span class="ct">${counts[c]} · ${pct(counts[c],n)}%</span></div><div class="track"><div class="seg" style="width:${Math.round(100*counts[c]/mx)}%;background:${reason[c][0]}"></div></div><div style="font-size:11.5px;color:var(--faint);margin-top:6px">${reason[c][1]}</div></div>`).join('');
+  const cats=[
+    {key:OUTCOMES.CALLBACK,color:'var(--navy)',reason:'Strongest conversion signal. Ensure the requested follow-up is completed promptly.'},
+    {key:OUTCOMES.CONTACT,color:'#247858',reason:'Usable contact details were captured, but no callback was requested — suitable for proactive nurture.'},
+    {key:OUTCOMES.RECOVERY,color:'var(--amber)',reason:'Meaningful admissions intent was detected, but no usable contact details were captured.'},
+    {key:OUTCOMES.GATE,color:'var(--coral)',reason:'The final Anya response was the details gate and the prospect did not continue. Answer first, then request details.'},
+    {key:OUTCOMES.ENGAGED,color:'#6f7f95',reason:'The prospect engaged, but the chat ended without a strong recovery signal or captured contact.'},
+    {key:OUTCOMES.LOW,color:'var(--cold)',reason:'The conversation ended with very little meaningful prospect engagement.'}
+  ];
+  const counts={};
+  VIEW.forEach(r=>{counts[r.outcome]=(counts[r.outcome]||0)+1;});
+  const n=VIEW.length;
+  const accounted=cats.reduce((sum,c)=>sum+(counts[c.key]||0),0);
+  const unknown=Math.max(0,n-accounted);
+  const visible=[...cats];
+  if(unknown)visible.push({key:'Other classified outcome',color:'var(--faint)',reason:'A record used an outcome not recognised by this dashboard version.',count:unknown});
+  const mx=Math.max(1,...visible.map(c=>c.count==null?(counts[c.key]||0):c.count));
+  const bars=visible.map(c=>{
+    const count=c.count==null?(counts[c.key]||0):c.count;
+    const drill=c.count==null?` data-drill="drop" data-arg="${esc(c.key)}"`:'';
+    return `<div class="bar clk"${drill} style="margin-bottom:18px"><div class="top"><span class="nm">${esc(c.key)}</span><span class="ct">${count.toLocaleString()} · ${pct(count,n)}%</span></div><div class="track"><div class="seg" style="width:${Math.round(100*count/mx)}%;background:${c.color}"></div></div><div style="font-size:11.5px;color:var(--faint);margin-top:6px">${c.reason}</div></div>`;
+  }).join('');
   return `<section id="sec-dropoff"><div class="shead"><span class="n">08</span><h2>Where chats drop off &amp; why</h2></div>
-    <div class="sdesc">Every chat lands in exactly one outcome, newest signal wins. The likely reason is inferred from how the conversation ended. Click any band to read those chats.</div>
-    <div class="panel">${bars}</div></section>`;
+    <div class="sdesc">Each chat appears once, using the furthest verified outcome reached. Exit reasons are inferred from the final interaction pattern. Click any band to read those chats.</div>
+    <div class="panel"><div class="cap" style="margin-bottom:16px">${accounted.toLocaleString()} of ${n.toLocaleString()} chats classified${accounted===n?' · 100% accounted for':''}</div>${bars}</div></section>`;
 }
 
 /* 09 volume */
@@ -1095,7 +1113,7 @@ function runAnyaRegressionChecks(){
     {"Chat Created At (IST)":"30 Jun 2026, 11:00:00 AM","Chat ID":"fixture-3","Agent Messages":3,"Full Conversation":"User: I need admission help, please call me\nAgent: Sure\nUser: Country Code: +91\nUser: Mobile Number: 9876543210"}
   ];
   let result;
-  try{buildRecords(fixture);const m=computeMetricsFor(RECORDS);result={ok:RECORDS.length===3&&m.gQ===2&&m.cb===1&&m.con===2&&RECORDS[0].contactCaptured===false&&RECORDS[1].callbackBooked===false&&RECORDS[2].rawPhone==='+919876543210',metrics:{records:RECORDS.length,answerGaps:m.gQ,contacts:m.con,callbacks:m.cb},dateMath:daysInclusive(20260628,20260704)===7};}
+  try{buildRecords(fixture);const m=computeMetricsFor(RECORDS);result={ok:RECORDS.length===3&&m.gQ===2&&m.cb===1&&m.con===2&&RECORDS[0].contactCaptured===false&&RECORDS[0].outcome===OUTCOMES.GATE&&RECORDS[1].callbackBooked===false&&RECORDS[2].rawPhone==='+919876543210',metrics:{records:RECORDS.length,answerGaps:m.gQ,contacts:m.con,callbacks:m.cb},dateMath:daysInclusive(20260628,20260704)===7};}
   finally{RECORDS=saved.records;VIEW=saved.view;PEOPLE=saved.people;DATA_MIN=saved.min;DATA_MAX=saved.max;window.DATA_QUALITY=saved.quality;}
   return result;
 }
@@ -1165,7 +1183,7 @@ function renderMethod(){
   <b>Engagement.</b> Engagement is based on meaningful prospect messages and completed user–Anya exchanges, not only the number of bot replies.<br><br>
   <b>Answer gap.</b> A user question is an answer gap when the next Anya response either requests details instead of answering or gives the generic scope deflection. The same definition is used across the summary, KPIs, topic bars, drill-downs and exports.<br><br>
   <b>Contact and callbacks.</b> Contact capture requires a usable phone number or valid email. Privacy consent alone is not counted. A callback request requires usable contact plus a non-empty callback field or explicit callback language from the prospect.<br><br>
-  <b>Recovery queue.</b> High-intent no-contact chats show meaningful demand signals—multiple questions/messages, programme interest or callback intent—but no usable phone/email.<br><br>
+  <b>Recovery queue.</b> High-intent no-contact chats show stronger demand signals—callback language, three or more meaningful messages, repeated questions, programme interest, or an admissions-critical theme—but no usable phone/email.<br><br>
   <b>People and priority.</b> Phones are normalised to a country-code form where possible; emails are lowercased. Chats are grouped on that canonical identity. Priority score (0–100): callback +45, depth ×3 (cap 12), questions ×2 (cap 15), repeat visit +15, known programme +8. Bands are operational heuristics, not predictive admissions outcomes.<br><br>
   <b>Trends and comparisons.</b> Topic trends split the selected range at its true chronological midpoint. Management KPI comparisons use the immediately preceding period of the same length; All-time has no prior-period comparison.<br><br>
   <b>Privacy and exports.</b> Full values are visible to signed-in users. CSV exports include UTF-8 support and neutralise spreadsheet-formula prefixes such as =, +, - and @.`;
