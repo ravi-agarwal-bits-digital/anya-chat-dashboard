@@ -63,6 +63,9 @@ const dashboardSandbox = {
 };
 dashboardSandbox.globalThis = dashboardSandbox;
 vm.runInNewContext(finalInlineScript(dashboard, 'index.html'), dashboardSandbox);
+assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('AANYAENC1payload'))", dashboardSandbox), true, 'encrypted payload detection');
+assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('PK\\x03\\x04plain-workbook'))", dashboardSandbox), false, 'plaintext workbook rejection');
+assert.match(dashboard, /if\(!isEncrypted\(bytes\)\)\{show\('dataPlaceholder'\);return;\}/, 'dashboard must reject unencrypted live data before parsing');
 const regression = vm.runInNewContext('runAnyaRegressionChecks()', dashboardSandbox);
 assert.equal(regression.ok, true, 'built-in analytics regression fixture');
 
