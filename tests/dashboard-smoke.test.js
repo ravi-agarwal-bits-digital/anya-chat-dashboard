@@ -50,6 +50,7 @@ const admin = read('admin/index.html');
 assert.match(dashboard, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
 assert.match(admin, /const DATA_MAGIC='AANYAENC1'/, 'admin encryption compatibility marker');
 assert.doesNotMatch(admin, /saveEncryptedToken|unlockSavedToken|TOKEN_VAULT_KEY/, 'admin token vault must not persist tokens');
+assert.doesNotMatch(admin, /writeBackup|makeBackupPath|backupFolder/, 'admin must retain only the live workbook');
 for (const retiredFile of ['index-v1.html', 'index-claude.html', 'index-last-latest.html']) {
   assert.equal(fs.existsSync(path.join(root, retiredFile)), false, `${retiredFile} must remain retired`);
 }
