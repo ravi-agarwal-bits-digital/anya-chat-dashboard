@@ -78,6 +78,7 @@ const adminSandbox = {
 adminSandbox.globalThis = adminSandbox;
 vm.runInNewContext(finalInlineScript(admin, 'admin/index.html'), adminSandbox);
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", adminSandbox), 1, 'usable chat quality detection');
+assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM IST','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", adminSandbox), 1, 'dashboard-compatible IST suffix detection');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'not a date','Chat ID':'chat-1','Full Conversation':''}]).usableRows", adminSandbox), 0, 'unusable chat quality detection');
 assert.match(admin, /id="publishConfirm"/, 'admin must require publication confirmation');
 assert.match(admin, /GitHub verification did not match the saved/, 'admin must verify published file metadata');
