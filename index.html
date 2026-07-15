@@ -342,7 +342,7 @@ html{scroll-padding-top:96px}body{background:linear-gradient(180deg,#f7f9fc 0%,#
           <button type="button" class="range-apply" onclick="applyCustom()">Apply</button>
         </div>
 
-        <div class="global-search-wrap"><input id="globalSearch" class="global-search" type="search" autocomplete="off" placeholder="Search person, phone, email, chat ID…" aria-label="Search current dashboard view" oninput="onGlobalSearch(this.value)" onfocus="onGlobalSearch(this.value)"><div id="globalSearchResults" class="global-search-results" role="listbox"></div></div>
+        <div class="global-search-wrap"><input id="globalSearch" class="global-search" type="search" autocomplete="off" placeholder="Search person, phone, email, chat ID…" aria-label="Search current dashboard view" aria-controls="globalSearchResults" aria-expanded="false" oninput="onGlobalSearch(this.value)" onfocus="onGlobalSearch(this.value)" onkeydown="onGlobalSearchKeydown(event)"><div id="globalSearchResults" class="global-search-results" role="listbox"></div></div>
         <div class="freshness" id="freshness" aria-live="polite"></div>
       </div>
     </header>
@@ -995,7 +995,8 @@ function explorerRows(){
   return rows;
 }
 function drawTable(){
-  const rows=explorerRows(),head=`<thead><tr><th data-c="key">When (IST)</th><th>Chat</th><th data-c="depth">Depth</th><th data-c="gated">Answer gaps</th><th data-c="contact">Contact</th><th data-c="callback">Callback</th><th>Topics</th><th></th></tr></thead>`;
+  const sortHeader=(col,label)=>`<th data-c="${col}" role="button" tabindex="0" aria-sort="${SORT.col===col?(SORT.dir===1?'ascending':'descending'):'none'}">${label}</th>`;
+  const rows=explorerRows(),head=`<thead><tr>${sortHeader('key','When (IST)')}<th>Chat</th>${sortHeader('depth','Depth')}${sortHeader('gated','Answer gaps')}${sortHeader('contact','Contact')}${sortHeader('callback','Callback')}<th>Topics</th><th></th></tr></thead>`;
   if(!rows.length){$("explTable").innerHTML=head+`<tbody><tr><td colspan="8" class="empty">No chats match.</td></tr></tbody>`;decorateResponsiveTables();return;}
   let body='';rows.forEach(r=>{const o=r.created,when=`${o.day} ${MONN[o.mon]} · ${fmtTime(o)}`,topics=[...new Set(r.questions.flatMap(q=>q.themes))].slice(0,3),open=EXPANDED.has(r.idx);
     body+=`<tr class="crow" data-idx="${r.idx}"><td class="mono" style="white-space:nowrap">${esc(when)}</td><td><div style="font-weight:600">${esc(r.title)}</div><div class="mono" style="font-size:10.5px;color:var(--faint)">${esc(maskId(r.id))}</div></td><td class="mono">${r.depth}</td><td>${r.gapCount>0?`<span class="pill g">${r.gapCount}</span>`:`<span class="pill n">0</span>`}</td><td><span class="pill ${r.contactCaptured?'y':'n'}">${r.contactCaptured?'yes':'—'}</span></td><td><span class="pill ${r.callbackBooked?'y':'n'}">${r.callbackBooked?'requested':'—'}</span></td><td>${topics.length?topics.map(t=>`<span class="pill n" style="margin-right:3px">${esc(t)}</span>`).join(''):'<span class="pill n">—</span>'}</td><td><button class="exp-btn" data-idx="${r.idx}" data-act="toggle">${open?'close':'open'}</button></td></tr>`;
@@ -1015,6 +1016,7 @@ function onSearch(v){SEARCH=v;drawTable();}
 function bindInteractions(){
   drawTable();const rep=$("report");
   rep.onclick=e=>{const drill=e.target.closest('[data-drill]');if(drill){openDrill(drill.getAttribute('data-drill'),drill.getAttribute('data-arg'));return;}const th=e.target.closest('th[data-c]');if(th){const c=th.getAttribute('data-c');if(SORT.col===c)SORT.dir*=-1;else{SORT.col=c;SORT.dir=-1;}drawTable();return;}const btn=e.target.closest('[data-act="toggle"]');if(btn){const idx=Number(btn.getAttribute('data-idx'));if(EXPANDED.has(idx))EXPANDED.delete(idx);else EXPANDED.add(idx);drawTable();}};
+  rep.onkeydown=e=>{const th=e.target.closest('th[data-c]');if(th&&(e.key==='Enter'||e.key===' ')){e.preventDefault();th.click();}};
   const si=$("explSearch");if(si)si.value=SEARCH;
 }
 
@@ -1132,15 +1134,19 @@ function runAnyaRegressionChecks(){
 
 
 function onGlobalSearch(value){
-  const box=$("globalSearchResults");if(!box)return;const q=String(value||'').trim().toLowerCase();
-  if(q.length<3){box.innerHTML='';box.classList.remove('show');return;}
+  const box=$("globalSearchResults"),input=$("globalSearch");if(!box)return;const q=String(value||'').trim().toLowerCase();
+  if(q.length<3){box.innerHTML='';box.classList.remove('show');input?.setAttribute('aria-expanded','false');return;}
   const people=PEOPLE.filter(p=>[p.name,p.email,p.phone].join(' ').toLowerCase().includes(q)).slice(0,5).map(p=>({type:'person',key:p.key,title:p.name||p.phone||p.email,sub:[p.phone,p.email,`${p.chats} chats`].filter(Boolean).join(' · ')}));
   const chats=VIEW.filter(r=>[r.id,r.title,r.summary,r.rawName,r.rawEmail,r.rawPhone,r.programs.join(' '),r.questions.map(x=>x.text).join(' ')].join(' ').toLowerCase().includes(q)).slice(0,7).map(r=>({type:'chat',key:r.idx,title:r.title,sub:[r.rawName,r.rawPhone||r.rawEmail,r.id].filter(Boolean).join(' · ')}));
-  const items=[...people,...chats].slice(0,10);box.innerHTML=items.length?items.map((x,i)=>`<button type="button" role="option" data-global-type="${x.type}" data-global-key="${esc(x.key)}"><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></button>`).join(''):`<div class="global-empty">No matches in selected date range</div>`;box.classList.add('show');
+  const items=[...people,...chats].slice(0,10);box.innerHTML=items.length?items.map((x,i)=>`<button type="button" role="option" data-global-type="${x.type}" data-global-key="${esc(x.key)}"><b>${esc(x.title)}</b><span>${esc(x.sub)}</span></button>`).join(''):`<div class="global-empty">No matches in selected date range</div>`;box.classList.add('show');input?.setAttribute('aria-expanded',items.length?'true':'false');
+}
+function onGlobalSearchKeydown(e){
+  const box=$("globalSearchResults"),items=[...(box?.querySelectorAll('[data-global-type]')||[])];if(!items.length)return;
+  if(e.key==='ArrowDown'){e.preventDefault();items[0].focus();}else if(e.key==='Escape'){box.classList.remove('show');$("globalSearch")?.setAttribute('aria-expanded','false');}
 }
 document.addEventListener('click',e=>{
-  const item=e.target.closest('[data-global-type]');if(item){const t=item.dataset.globalType,k=item.dataset.globalKey;$("globalSearchResults")?.classList.remove('show');if(t==='person')openDrill('person',k);else openDrill('chat',k);return;}
-  if(!e.target.closest('.global-search-wrap'))$("globalSearchResults")?.classList.remove('show');
+  const item=e.target.closest('[data-global-type]');if(item){const t=item.dataset.globalType,k=item.dataset.globalKey;$("globalSearchResults")?.classList.remove('show');$("globalSearch")?.setAttribute('aria-expanded','false');if(t==='person')openDrill('person',k);else openDrill('chat',k);return;}
+  if(!e.target.closest('.global-search-wrap')){$("globalSearchResults")?.classList.remove('show');$("globalSearch")?.setAttribute('aria-expanded','false');}
 });
 function decorateResponsiveTables(){
   document.querySelectorAll('#sec-leads table,#sec-serial table,#sec-callbacks table,#sec-explorer table').forEach(table=>{

@@ -1,0 +1,11 @@
+# Never stage a raw chat export. Encrypted production workbooks already tracked
+# by Git remain tracked; this protects newly created local exports.
+*.csv
+*.xls
+*.xlsx
+!tests/fixtures/chat_analytics_fixture.xlsx
+
+# Local editor and operating-system state.
+.DS_Store
+.idea/
+.vscode/
