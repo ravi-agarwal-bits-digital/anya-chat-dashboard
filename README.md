@@ -9,7 +9,7 @@ Static GitHub Pages dashboard and admin publisher for BITS Pilani Digital chat a
 - `data/chat_analytics.xlsx` — encrypted live workbook.
 - `data/dashboard-config.json` — published data path, worksheet, and freshness metadata.
 
-The dashboard is intentionally static: data is decrypted in the browser and no end-user upload control is exposed. The visible product name is **Anya**; the encrypted payload format remains `AANYAENC1` for compatibility.
+The dashboard is intentionally static: data is decrypted in the browser and no end-user upload control is exposed. The admin publisher retains only the live encrypted workbook. The visible product name is **Anya**; the encrypted payload format remains `AANYAENC1` for compatibility.
 
 ## Workbook contract
 

@@ -159,16 +159,14 @@ input:focus,select:focus{border-color:#b9c9df;box-shadow:0 0 0 4px rgba(47,100,1
           <div class="field"><label for="branch">Branch</label><input id="branch" type="text" value="main"></div>
           <div class="field"><label for="path">Live data path</label><input id="path" type="text" value="data/chat_analytics.xlsx"></div>
           <div class="field"><label for="sheet">Expected sheet</label><input id="sheet" type="text" value="Chats Export"></div>
-          <div class="field"><label for="backupFolder">Backup folder</label><input id="backupFolder" type="text" value="data"></div>
           <div class="field"><label for="configPath">Dashboard config path</label><input id="configPath" type="text" value="data/dashboard-config.json"></div>
         </div>
         <label class="checkRow"><input type="checkbox" id="rememberRepo" checked>Remember repository settings on this device</label>
-        <label class="checkRow"><input type="checkbox" id="writeBackup" checked>Also write a dated encrypted backup before updating the live dashboard file</label>
         <label class="checkRow"><input type="checkbox" id="writeConfig" checked>Publish dashboard configuration and timestamp so the dashboard always reads the same path and sheet</label>
 
         <div class="sectionLabel" style="margin-top:22px">03 Token memory</div>
         <h2>GitHub fine-grained token</h2>
-        <p>Recommended mode: remember for this browser session. For trusted devices, you may save it encrypted locally with a separate unlock phrase.</p>
+        <p>Recommended mode: remember for this browser session only. The token is never persisted on this device.</p>
         <div class="field"><label for="token">GitHub token</label><input id="token" type="password" placeholder="github_pat_..." autocomplete="off"></div>
         <div class="tokenMode">
           <label class="tokenOption"><input type="radio" name="tokenMode" value="session" checked><span><strong>Remember for this session</strong><small>Survives refresh, clears when browser session ends. Recommended default.</small></span></label>
@@ -185,7 +183,7 @@ input:focus,select:focus{border-color:#b9c9df;box-shadow:0 0 0 4px rgba(47,100,1
         <div class="step"><div class="num">1</div><div><b>Excel is encrypted before publishing</b><span>The dashboard decrypts it after password login using the same passphrase. The encrypted file keeps the legacy AANYAENC1 signature for compatibility.</span></div></div>
         <div class="step"><div class="num">2</div><div><b>Token remains session-only</b><span>The token is never persisted in localStorage and clears when the browser session ends.</span></div></div>
         <div class="step"><div class="num">3</div><div><b>Use fine-grained GitHub token</b><span>Give access only to this repository and contents write permission. Do not use a broad classic personal access token.</span></div></div>
-        <div class="step"><div class="num">4</div><div><b>Dashboard configuration stays in sync</b><span>Each successful publish can update dashboard-config.json with the live data path, expected sheet, source filename, row count and actual publish time.</span></div></div>
+        <div class="step"><div class="num">4</div><div><b>Only the live workbook is retained</b><span>Each successful publish replaces the encrypted live workbook and updates dashboard-config.json; dated workbook backups are not created.</span></div></div>
       </div>
     </div>
     <div class="footer">BITS Pilani Digital · Anya Chat Intelligence · Admin Console</div>
@@ -196,7 +194,6 @@ const ADMIN_PASSWORD_HASH='2f8f998b75f4bfd79e4b9a0760d82905cfbe1fccb942ecfd6d1e8
 const DATA_MAGIC='AANYAENC1';
 const DEFAULT_DATA_PATH='data/chat_analytics.xlsx';
 const DEFAULT_REQUIRED_SHEET='Chats Export';
-const DEFAULT_BACKUP_FOLDER='data';
 const DEFAULT_CONFIG_PATH='data/dashboard-config.json';
 const CONFIG_SCHEMA_VERSION=1;
 const REQUIRED_COLS=['Chat Created At (IST)','Chat ID','Agent Messages','Total Tokens','Summary','Full Conversation'];
@@ -247,7 +244,7 @@ function setupUpload(){
   ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('over');}));
   ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('over');}));
   dz.addEventListener('drop',e=>{if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0]);});
-  ['sheet','path','backupFolder','configPath'].forEach(id=>{const el=$(id);if(el)el.addEventListener('change',()=>{if(selectedFile)setFile(selectedFile);});});
+  ['sheet','path','configPath'].forEach(id=>{const el=$(id);if(el)el.addEventListener('change',()=>{if(selectedFile)setFile(selectedFile);});});
 }
 async function setFile(file){
   selectedFile=file||null;selectedFileBytes=null;validationInfo=null;$('publishBtn').disabled=true;hideStatus('publishStatus');hideStatus('fileStatus');
@@ -280,7 +277,7 @@ async function validateWorkbook(file){
   return {rows:rows.length,sheet,headers:headers.length};
 }
 function currentMode(){return document.querySelector('input[name="tokenMode"]:checked')?.value||'session';}
-function getConnectionSettings(){return {owner:$('owner').value.trim(),repo:$('repo').value.trim(),branch:$('branch').value.trim()||'main',path:$('path').value.trim()||DEFAULT_DATA_PATH,sheet:($('sheet').value||DEFAULT_REQUIRED_SHEET).trim()||DEFAULT_REQUIRED_SHEET,backupFolder:($('backupFolder').value||DEFAULT_BACKUP_FOLDER).trim()||DEFAULT_BACKUP_FOLDER,configPath:($('configPath').value||DEFAULT_CONFIG_PATH).trim()||DEFAULT_CONFIG_PATH,writeBackup:!!$('writeBackup').checked,writeConfig:!!$('writeConfig').checked};}
+function getConnectionSettings(){return {owner:$('owner').value.trim(),repo:$('repo').value.trim(),branch:$('branch').value.trim()||'main',path:$('path').value.trim()||DEFAULT_DATA_PATH,sheet:($('sheet').value||DEFAULT_REQUIRED_SHEET).trim()||DEFAULT_REQUIRED_SHEET,configPath:($('configPath').value||DEFAULT_CONFIG_PATH).trim()||DEFAULT_CONFIG_PATH,writeConfig:!!$('writeConfig').checked};}
 function saveConnectionSettings(){
   if($('rememberRepo').checked)localStorage.setItem(REPO_SETTINGS_KEY,JSON.stringify(getConnectionSettings()));
   const token=$('token').value.trim();const mode=currentMode();
@@ -289,8 +286,8 @@ function saveConnectionSettings(){
   else showStatus('tokenStatus','Repository settings saved.','ok');
 }
 function loadConnectionSettings(){
-  $('path').value=DEFAULT_DATA_PATH;$('sheet').value=DEFAULT_REQUIRED_SHEET;$('backupFolder').value=DEFAULT_BACKUP_FOLDER;$('configPath').value=DEFAULT_CONFIG_PATH;$('branch').value=$('branch').value||'main';
-  try{const s=JSON.parse(localStorage.getItem(REPO_SETTINGS_KEY)||'null');if(s){$('owner').value=s.owner||'';$('repo').value=s.repo||'';$('branch').value=s.branch||'main';$('path').value=s.path||DEFAULT_DATA_PATH;$('sheet').value=s.sheet||DEFAULT_REQUIRED_SHEET;$('backupFolder').value=s.backupFolder||DEFAULT_BACKUP_FOLDER;$('configPath').value=s.configPath||DEFAULT_CONFIG_PATH;$('writeBackup').checked=s.writeBackup!==false;$('writeConfig').checked=s.writeConfig!==false;}}catch(e){}
+  $('path').value=DEFAULT_DATA_PATH;$('sheet').value=DEFAULT_REQUIRED_SHEET;$('configPath').value=DEFAULT_CONFIG_PATH;$('branch').value=$('branch').value||'main';
+  try{const s=JSON.parse(localStorage.getItem(REPO_SETTINGS_KEY)||'null');if(s){$('owner').value=s.owner||'';$('repo').value=s.repo||'';$('branch').value=s.branch||'main';$('path').value=s.path||DEFAULT_DATA_PATH;$('sheet').value=s.sheet||DEFAULT_REQUIRED_SHEET;$('configPath').value=s.configPath||DEFAULT_CONFIG_PATH;$('writeConfig').checked=s.writeConfig!==false;}}catch(e){}
 }
 function loadSessionToken(){const t=sessionStorage.getItem(SESSION_TOKEN_KEY);if(t){$('token').value=t;showStatus('tokenStatus','Session token loaded.','ok');}}
 function clearSessionToken(){sessionStorage.removeItem(SESSION_TOKEN_KEY);$('token').value='';showStatus('tokenStatus','Session token cleared.','warn');}
@@ -303,8 +300,6 @@ function requireSettings(){
   if(s.writeConfig&&!/\.json$/i.test(s.configPath))throw new Error('Dashboard config path must end in .json.');
   return s;
 }
-function pathDir(path){const parts=String(path||'').split('/');parts.pop();return parts.join('/')||'.';}
-function makeBackupPath(livePath,folder){const cleanFolder=String(folder||pathDir(livePath)||'data').replace(/^\/+|\/+$/g,'')||'data';const name=String(livePath||DEFAULT_DATA_PATH).split('/').pop().replace(/\.(xlsx|xls)$/i,'');const today=new Date().toLocaleDateString('en-CA');return cleanFolder+'/'+name+'_'+today+'.xlsx';}
 function buildDashboardConfig(settings){
   return {
     schemaVersion:CONFIG_SCHEMA_VERSION,
@@ -340,7 +335,6 @@ async function publishData(){
     const encrypted=await encryptBytes(selectedFileBytes,ADMIN_PASSPHRASE,DATA_MAGIC);
     const content=bytesToBase64(encrypted);
     const uploaded=[];
-    if(s.writeBackup){const backupPath=makeBackupPath(s.path,s.backupFolder);showStatus('publishStatus','Encrypted. Publishing dated backup…','warn');await putGithubFile(s,backupPath,content,token,'Backup Anya chat analytics data');uploaded.push('Backup saved: '+backupPath);}
     showStatus('publishStatus','Publishing live dashboard data file…','warn');
     await putGithubFile(s,s.path,content,token,'Update Anya chat analytics data');uploaded.push('Live file updated: '+s.path);
     if(s.writeConfig){
