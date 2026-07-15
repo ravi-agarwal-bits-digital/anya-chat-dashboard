@@ -17,5 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run dashboard smoke checks
-        run: node tests/dashboard-smoke.test.js
+      - name: Run dashboard and admin smoke checks
+        run: |
+          node tests/dashboard-smoke.test.js
+          node tests/admin-smoke.test.js

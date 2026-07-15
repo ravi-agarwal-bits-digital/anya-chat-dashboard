@@ -37,7 +37,7 @@ function unzip(entry) {
 
 for (const file of productionFiles) {
   const html = read(file);
-  assert.doesNotThrow(() => new Function(finalInlineScript(html, file)), `${file}: JavaScript syntax`);
+  if (file === 'index.html') assert.doesNotThrow(() => new Function(finalInlineScript(html, file)), file + ': JavaScript syntax');
   const ids = staticIds(html);
   const duplicates = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
   assert.deepEqual(duplicates, [], `${file}: duplicate static IDs: ${duplicates.join(', ')}`);
@@ -47,10 +47,16 @@ for (const file of productionFiles) {
 
 const dashboard = read('index.html');
 const admin = read('admin/index.html');
+const adminScript = read('js/admin.js');
 assert.match(dashboard, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
-assert.match(admin, /const DATA_MAGIC='AANYAENC1'/, 'admin encryption compatibility marker');
-assert.doesNotMatch(admin, /saveEncryptedToken|unlockSavedToken|TOKEN_VAULT_KEY/, 'admin token vault must not persist tokens');
-assert.doesNotMatch(admin, /writeBackup|makeBackupPath|backupFolder/, 'admin must retain only the live workbook');
+assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
+assert.match(admin, /src="\.\.\/js\/admin\.js"/, 'admin script link');
+assert.doesNotMatch(admin, /<style\b/i, 'admin must not retain inline styles');
+assert.doesNotMatch(admin, /<script>([\s\S]*?)<\/script>/i, 'admin must not retain inline application scripts');
+assert.doesNotMatch(adminScript, /saveEncryptedToken|unlockSavedToken|TOKEN_VAULT_KEY/, 'admin token vault must not persist tokens');
+assert.doesNotMatch(adminScript, /writeBackup|makeBackupPath|backupFolder/, 'admin must retain only the live workbook');
+assert.match(adminScript, /const DATA_MAGIC='AANYAENC1'/, 'admin encryption compatibility marker');
+assert.doesNotThrow(() => new Function(adminScript), 'admin JavaScript syntax');
 for (const retiredFile of ['index-v1.html', 'index-claude.html', 'index-last-latest.html']) {
   assert.equal(fs.existsSync(path.join(root, retiredFile)), false, `${retiredFile} must remain retired`);
 }
@@ -76,13 +82,13 @@ const adminSandbox = {
   window: {addEventListener() {}}
 };
 adminSandbox.globalThis = adminSandbox;
-vm.runInNewContext(finalInlineScript(admin, 'admin/index.html'), adminSandbox);
+vm.runInNewContext(adminScript, adminSandbox);
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", adminSandbox), 1, 'usable chat quality detection');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM IST','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", adminSandbox), 1, 'dashboard-compatible IST suffix detection');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'not a date','Chat ID':'chat-1','Full Conversation':''}]).usableRows", adminSandbox), 0, 'unusable chat quality detection');
 assert.match(admin, /id="publishConfirm"/, 'admin must require publication confirmation');
-assert.match(admin, /GitHub verification did not match the saved/, 'admin must verify published file metadata');
-assert.match(admin, /MAX_FILE_BYTES=90\*1024\*1024/, 'admin must protect GitHub file-size limits');
+assert.match(adminScript, /GitHub verification did not match the saved/, 'admin must verify published file metadata');
+assert.match(adminScript, /MAX_FILE_BYTES=90\*1024\*1024/, 'admin must protect GitHub file-size limits');
 
 for (const file of fs.readdirSync(path.join(root, 'data')).filter(name => name.endsWith('.xlsx'))) {
   const bytes = fs.readFileSync(path.join(root, 'data', file));
