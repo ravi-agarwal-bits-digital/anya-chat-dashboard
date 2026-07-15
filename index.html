@@ -446,10 +446,9 @@ function autoLoadExcel(){
   show('dataLoading');
   fetch(DATA_FILE,{cache:'no-store'}).then(r=>{if(r.ok)return r.arrayBuffer();throw new Error('nf');}).then(async buf=>{
     let bytes=new Uint8Array(buf);
-    if(isEncrypted(bytes)){
-      try{bytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');}
-      catch(e){$("dataLoading").style.display='none';$("loginError").textContent="Could not decrypt — wrong password. Re-enter.";$("loginGate").style.display='flex';$("dashboardContent").style.display='none';sessionStorage.removeItem('dk');sessionStorage.removeItem('auth_user');return;}
-    }
+    if(!isEncrypted(bytes)){show('dataPlaceholder');return;}
+    try{bytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');}
+    catch(e){$("dataLoading").style.display='none';$("loginError").textContent="Could not decrypt — wrong password. Re-enter.";$("loginGate").style.display='flex';$("dashboardContent").style.display='none';sessionStorage.removeItem('dk');sessionStorage.removeItem('auth_user');return;}
     parseWorkbook(bytes);
   }).catch(()=>show('dataPlaceholder'));
 }
