@@ -69,6 +69,20 @@ assert.match(dashboard, /if\(!isEncrypted\(bytes\)\)\{show\('dataPlaceholder'\);
 const regression = vm.runInNewContext('runAnyaRegressionChecks()', dashboardSandbox);
 assert.equal(regression.ok, true, 'built-in analytics regression fixture');
 
+const adminSandbox = {
+  Date, Math, RegExp, Set, TextEncoder, Uint8Array,
+  console,
+  document: {addEventListener() {}, getElementById() { return null; }, querySelector() { return null; }},
+  window: {addEventListener() {}}
+};
+adminSandbox.globalThis = adminSandbox;
+vm.runInNewContext(finalInlineScript(admin, 'admin/index.html'), adminSandbox);
+assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", adminSandbox), 1, 'usable chat quality detection');
+assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'not a date','Chat ID':'chat-1','Full Conversation':''}]).usableRows", adminSandbox), 0, 'unusable chat quality detection');
+assert.match(admin, /id="publishConfirm"/, 'admin must require publication confirmation');
+assert.match(admin, /GitHub verification did not match the saved/, 'admin must verify published file metadata');
+assert.match(admin, /MAX_FILE_BYTES=90\*1024\*1024/, 'admin must protect GitHub file-size limits');
+
 for (const file of fs.readdirSync(path.join(root, 'data')).filter(name => name.endsWith('.xlsx'))) {
   const bytes = fs.readFileSync(path.join(root, 'data', file));
   assert.equal(bytes.subarray(0, 9).toString('utf8'), 'AANYAENC1', `${file}: encrypted data marker`);
