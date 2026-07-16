@@ -48,6 +48,12 @@ for (const file of productionFiles) {
 const dashboard = read('index.html');
 const admin = read('admin/index.html');
 const adminScript = read('js/admin.js');
+const dashboardHead = dashboard.slice(0, dashboard.indexOf('</head>'));
+const dashboardCss = read('css/dashboard.css');
+
+assert.match(dashboardHead, /href="css\/dashboard\.css"/, 'dashboard stylesheet link');
+assert.doesNotMatch(dashboardHead, /<style\b/i, 'dashboard must not retain an inline head stylesheet');
+assert.match(dashboardCss, /\.chat-exec-shell/, 'dashboard stylesheet content');
 assert.match(dashboard, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
 assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
 assert.match(admin, /src="\.\.\/js\/admin\.js"/, 'admin script link');
