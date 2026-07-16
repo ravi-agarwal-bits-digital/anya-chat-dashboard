@@ -54,6 +54,15 @@ const dashboardCss = read('css/dashboard.css');
 assert.match(dashboardHead, /href="css\/dashboard\.css"/, 'dashboard stylesheet link');
 assert.doesNotMatch(dashboardHead, /<style\b/i, 'dashboard must not retain an inline head stylesheet');
 assert.match(dashboardCss, /\.chat-exec-shell/, 'dashboard stylesheet content');
+assert.match(dashboard, /href="assets\/favicon\.png"/, 'dashboard shared favicon');
+assert.match(dashboard, /src="assets\/bits-pilani-digital-logo\.jpg"/, 'dashboard shared logo');
+assert.match(admin, /href="\.\.\/assets\/favicon\.png"/, 'admin shared favicon');
+assert.match(admin, /src="\.\.\/assets\/bits-pilani-digital-logo\.jpg"/, 'admin shared logo');
+assert.doesNotMatch(dashboard + admin, /data:image\//, 'production pages must not embed image data');
+assert.doesNotMatch(dashboard + admin, /img-src 'self' data:/, 'production CSP must not allow embedded images');
+for (const asset of ['assets/favicon.png', 'assets/bits-pilani-digital-logo.jpg']) {
+  assert.equal(fs.existsSync(path.join(root, asset)), true, `${asset}: shared asset exists`);
+}
 assert.match(dashboard, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
 assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
 assert.match(admin, /src="\.\.\/js\/admin\.js"/, 'admin script link');
