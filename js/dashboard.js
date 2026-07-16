@@ -15,7 +15,7 @@ async function checkPassword(){
   if(!pwd){$("loginError").textContent="Enter the access password.";return;}
   if(await sha256(pwd)===SECURITY.PASSWORD_HASH){
     window.DECRYPT_PASSPHRASE=pwd;
-    sessionStorage.setItem('auth_user','password_user');sessionStorage.setItem('auth_time',Date.now().toString());sessionStorage.setItem('dk',pwd);
+    sessionStorage.setItem('auth_time',Date.now().toString());
     unlockDashboard();
   }else{$("loginError").textContent="Incorrect password.";$("loginPassword").value="";}
 }
@@ -29,10 +29,10 @@ function startSessionTimer(){
   if(!activityBound){const reset=()=>sessionStorage.setItem('auth_time',Date.now().toString());['click','keydown','scroll','mousemove'].forEach(e=>document.addEventListener(e,reset,{passive:true}));activityBound=true;}
   sessionTimer=setInterval(()=>{if(Date.now()-Number(sessionStorage.getItem('auth_time')||0)>t)lockDashboard();},30000);
 }
-function lockDashboard(){clearInterval(sessionTimer);sessionStorage.clear();closeDrill();$("loginGate").style.display='flex';$("dashboardContent").style.display='none';$("loginError").textContent="Session locked. Enter the password to continue.";}
+function clearDashboardSession(){window.DECRYPT_PASSPHRASE='';sessionStorage.removeItem('auth_time');sessionStorage.removeItem('auth_user');sessionStorage.removeItem('dk');}
+function lockDashboard(){clearInterval(sessionTimer);clearDashboardSession();closeDrill();$("loginGate").style.display='flex';$("dashboardContent").style.display='none';$("loginError").textContent="Session locked. Enter the password to continue.";}
 function checkExistingSession(){
-  const at=Number(sessionStorage.getItem('auth_time')||0),au=sessionStorage.getItem('auth_user');
-  if(au&&Date.now()-at<SECURITY.SESSION_TIMEOUT_MINS*60*1000){window.DECRYPT_PASSPHRASE=sessionStorage.getItem('dk')||'';unlockDashboard();return true;}
+  clearDashboardSession();
   return false;
 }
 function bindDashboardEvents(){
@@ -102,7 +102,7 @@ function autoLoadExcel(){
     let bytes=new Uint8Array(buf);
     if(!isEncrypted(bytes)){show('dataPlaceholder');return;}
     try{bytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');}
-    catch(e){$("dataLoading").style.display='none';$("loginError").textContent="Could not decrypt — wrong password. Re-enter.";$("loginGate").style.display='flex';$("dashboardContent").style.display='none';sessionStorage.removeItem('dk');sessionStorage.removeItem('auth_user');return;}
+    catch(e){$("dataLoading").style.display='none';$("loginError").textContent="Could not decrypt — wrong password. Re-enter.";$("loginGate").style.display='flex';$("dashboardContent").style.display='none';clearDashboardSession();return;}
     parseWorkbook(bytes);
   }).catch(()=>show('dataPlaceholder'));
 }
