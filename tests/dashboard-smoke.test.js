@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const childProcess = require('node:child_process');
+const { webcrypto } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -78,7 +79,7 @@ for (const retiredFile of ['index-v1.html', 'index-claude.html', 'index-last-lat
 }
 
 const dashboardSandbox = {
-  ArrayBuffer, Blob, Date, Math, RegExp, Set, TextEncoder, Uint8Array,
+  ArrayBuffer, Blob, Date, Math, RegExp, Set, TextEncoder, Uint8Array, crypto: webcrypto,
   console,
   document: {addEventListener() {}, getElementById() { return null; }, querySelector() { return null; }, querySelectorAll() { return []; }},
   window: {addEventListener() {}, DATA_QUALITY: null}
@@ -92,7 +93,7 @@ const regression = vm.runInNewContext('runAnyaRegressionChecks()', dashboardSand
 assert.equal(regression.ok, true, 'built-in analytics regression fixture');
 
 const adminSandbox = {
-  Date, Math, RegExp, Set, TextEncoder, Uint8Array,
+  Date, Math, RegExp, Set, TextEncoder, Uint8Array, crypto: webcrypto,
   console,
   document: {addEventListener() {}, getElementById() { return null; }, querySelector() { return null; }},
   window: {addEventListener() {}}
@@ -110,6 +111,10 @@ for (const file of fs.readdirSync(path.join(root, 'data')).filter(name => name.e
   const bytes = fs.readFileSync(path.join(root, 'data', file));
   assert.equal(bytes.subarray(0, 9).toString('utf8'), 'AANYAENC1', `${file}: encrypted data marker`);
 }
+const dashboardConfig = JSON.parse(read('data/dashboard-config.json'));
+assert.equal(dashboardConfig.dataFile, 'data/chat_analytics.xlsx', 'published data path');
+assert.equal(dashboardConfig.sheetName, 'Chats Export', 'published worksheet');
+assert.equal(fs.existsSync(path.join(root, dashboardConfig.dataFile)), true, 'published workbook exists');
 
 const workbookXml = unzip('xl/workbook.xml');
 assert.match(workbookXml, /name="Chats Export"/, 'fixture worksheet name');
@@ -119,4 +124,26 @@ for (const column of requiredColumns) {
   assert.match(worksheetXml, new RegExp(escaped), `fixture column: ${column}`);
 }
 
-console.log('dashboard smoke checks passed');
+async function verifyEncryptedDataContract() {
+  const fixtureBytes = new Uint8Array(fs.readFileSync(path.join(root, 'tests/fixtures/chat_analytics_fixture.xlsx')));
+  const passphrase = webcrypto.randomUUID();
+  adminSandbox.contractFixture = fixtureBytes;
+  adminSandbox.contractPassphrase = passphrase;
+  const encrypted = await vm.runInNewContext('encryptBytes(contractFixture, contractPassphrase)', adminSandbox);
+
+  assert.equal(Buffer.from(encrypted.subarray(0, 9)).toString('utf8'), 'AANYAENC1', 'admin encryption marker');
+  dashboardSandbox.contractPayload = encrypted;
+  dashboardSandbox.contractPassphrase = passphrase;
+  const decrypted = await vm.runInNewContext('decryptData(contractPayload, contractPassphrase)', dashboardSandbox);
+  assert.deepEqual(Buffer.from(decrypted), Buffer.from(fixtureBytes), 'dashboard decrypts admin-encrypted fixture exactly');
+  assert.equal(vm.runInNewContext('isEncrypted(contractPayload)', dashboardSandbox), true, 'dashboard recognizes admin-encrypted fixture');
+  dashboardSandbox.contractPassphrase = webcrypto.randomUUID();
+  await assert.rejects(() => vm.runInNewContext('decryptData(contractPayload, contractPassphrase)', dashboardSandbox), 'dashboard rejects an incorrect passphrase');
+}
+
+verifyEncryptedDataContract().then(() => {
+  console.log('dashboard smoke checks passed');
+}).catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
