@@ -36,6 +36,8 @@ for (const file of productionFiles) {
   assert.deepEqual(duplicates, [], `${file}: duplicate static IDs: ${duplicates.join(', ')}`);
   assert.match(html, /integrity="sha384-[^"]+" crossorigin="anonymous"/, `${file}: SheetJS must be integrity pinned`);
   assert.match(html, /Content-Security-Policy/, `${file}: CSP is required`);
+  assert.doesNotMatch(html, /\son[a-z]+\s*=/i, `${file}: inline event handlers are not allowed`);
+  assert.doesNotMatch(html, /script-src[^;]*'unsafe-inline'/i, `${file}: CSP must block inline scripts`);
 }
 
 const dashboard = read('index.html');
@@ -65,6 +67,8 @@ assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
 assert.match(admin, /src="\.\.\/js\/admin\.js"/, 'admin script link');
 assert.doesNotMatch(admin, /<style\b/i, 'admin must not retain inline styles');
 assert.doesNotMatch(admin, /<script>([\s\S]*?)<\/script>/i, 'admin must not retain inline application scripts');
+assert.doesNotMatch(dashboardScript, /\son[a-z]+\s*=/i, 'dashboard script must not emit inline event handlers');
+assert.doesNotMatch(adminScript, /\son[a-z]+\s*=/i, 'admin script must not emit inline event handlers');
 assert.doesNotMatch(adminScript, /saveEncryptedToken|unlockSavedToken|TOKEN_VAULT_KEY/, 'admin token vault must not persist tokens');
 assert.doesNotMatch(adminScript, /writeBackup|makeBackupPath|backupFolder/, 'admin must retain only the live workbook');
 assert.match(adminScript, /const DATA_MAGIC='AANYAENC1'/, 'admin encryption compatibility marker');

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self' https://api.github.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self' https://api.github.com;">
 <title>Anya Chat Data Upload Console</title>
 <link rel="icon" type="image/png" sizes="180x180" href="../assets/favicon.png">
 <link rel="apple-touch-icon" sizes="180x180" href="../assets/favicon.png">
@@ -22,8 +22,8 @@
     <div class="sectionLabel">Admin only</div>
     <h2>Data Upload Console</h2>
     <p class="help">Publish the latest Anya chat analytics export securely to the dashboard data path.</p>
-    <div class="field" style="text-align:left"><label for="adminPassword">Admin password</label><input type="password" id="adminPassword" placeholder="Enter admin password" onkeyup="if(event.key==='Enter')unlockAdmin()"></div>
-    <div class="actions"><button class="btn primary" onclick="unlockAdmin()">Unlock console</button></div>
+    <div class="field" style="text-align:left"><label for="adminPassword">Admin password</label><input type="password" id="adminPassword" placeholder="Enter admin password"></div>
+    <div class="actions"><button class="btn primary" id="unlockAdminBtn">Unlock console</button></div>
     <div id="gateStatus" class="status warn hidden"></div>
   </div>
 </div>
@@ -47,7 +47,7 @@
         <div class="sectionLabel">01 Upload workflow</div>
         <h2>Publish latest chat export</h2>
         <p>Choose the chat Excel export. The browser validates the sheet, encrypts locally using the admin password, then publishes it to the configured GitHub data path.</p>
-        <div class="uploadBox" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Select Excel export" onclick="fileInput.click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();fileInput.click()}">
+        <div class="uploadBox" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Select Excel export">
           <div class="uploadIcon">↑</div>
           <h2 style="margin-bottom:4px">Select Excel export</h2>
           <p class="help">.xlsx or .xls file from the chat vendor</p>
@@ -60,7 +60,7 @@
           <div class="metric"><div class="v" id="rowCount">—</div><div class="l">Rows ready</div></div>
         </div>
         <div class="actions">
-          <button id="publishBtn" class="btn primary" onclick="publishData()" disabled>Encrypt & publish</button>
+          <button id="publishBtn" class="btn primary" disabled>Encrypt & publish</button>
           <a class="btn gold" href="../index.html" target="_blank" rel="noopener">Open dashboard</a>
         </div>
         <label class="checkRow"><input type="checkbox" id="publishConfirm" disabled> I reviewed the validation summary and want to replace the current production dataset.</label>
@@ -91,7 +91,7 @@
           <label class="tokenOption"><input type="radio" name="tokenMode" value="session" checked><span><strong>Remember for this session</strong><small>Survives refresh, clears when browser session ends. Recommended default.</small></span></label>
           <label class="tokenOption"><input type="radio" name="tokenMode" value="never"><span><strong>Do not remember token</strong><small>Most cautious, but you will enter the token every time.</small></span></label>
         </div>
-        <div class="actions"><button class="btn" onclick="saveConnectionSettings()">Save settings</button><button class="btn danger" onclick="clearSessionToken()">Clear session token</button></div>
+        <div class="actions"><button class="btn" id="saveConnectionSettingsBtn">Save settings</button><button class="btn danger" id="clearSessionTokenBtn">Clear session token</button></div>
         <div id="tokenStatus" class="status hidden"></div>
       </div>
     </div>

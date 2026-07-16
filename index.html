@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self';">
 <title>Anya Chat Intelligence</title>
 <!-- v20: dashboard/admin configuration sync and maintainability cleanup -->
 <link rel="icon" type="image/png" sizes="180x180" href="assets/favicon.png">
@@ -23,8 +23,8 @@
     <img class="login-logo-img" src="assets/bits-pilani-digital-logo.jpg" alt="BITS Pilani Digital logo">
     <h1>Anya Chat Intelligence</h1>
     <p>BITS Pilani Digital — authorized access only</p>
-    <input type="password" id="loginPassword" placeholder="Enter access password…" aria-label="Dashboard access password" onkeyup="if(event.key==='Enter')checkPassword()">
-    <button class="pwd-btn" onclick="checkPassword()">Unlock dashboard</button>
+    <input type="password" id="loginPassword" placeholder="Enter access password…" aria-label="Dashboard access password">
+    <button class="pwd-btn" id="unlockDashboardBtn">Unlock dashboard</button>
     <div id="loginError" class="err-msg"></div>
   </div>
 </div>
@@ -40,7 +40,7 @@
       <div style="font-size:52px;margin-bottom:14px">⌗</div>
       <h1 style="font-family:'Fraunces',serif;font-size:26px;margin-bottom:10px">No chat data yet</h1>
       <p style="color:var(--muted);font-size:14px;margin-bottom:20px">Publish an export from the admin uploader, then reload. The dashboard reads <span class="mono">data/chat_analytics.xlsx</span>.</p>
-      <button class="pwd-btn" style="width:auto;padding:10px 22px" onclick="retryDataLoad()">Retry</button>
+      <button class="pwd-btn" id="retryDataLoadBtn" style="width:auto;padding:10px 22px">Retry</button>
     </div>
   </div>
 
@@ -81,20 +81,20 @@
         </div>
       </div>
       <div class="toolbar range-toolbar" aria-label="Date range filters">
-        <button type="button" class="chip" data-range="today" onclick="setRange('today',this)">Today</button>
-        <button type="button" class="chip" data-range="yesterday" onclick="setRange('yesterday',this)">Yesterday</button>
-        <button type="button" class="chip" data-range="7" onclick="setRange('7',this)">Last 7 Days</button>
-        <button type="button" class="chip" data-range="30" onclick="setRange('30',this)">Last 30 Days</button>
-        <button type="button" class="chip active" data-range="all" onclick="setRange('all',this)">All</button>
-        <button type="button" class="chip" data-range="custom" onclick="setRange('custom',this)">Custom Range</button>
+        <button type="button" class="chip" data-range="today">Today</button>
+        <button type="button" class="chip" data-range="yesterday">Yesterday</button>
+        <button type="button" class="chip" data-range="7">Last 7 Days</button>
+        <button type="button" class="chip" data-range="30">Last 30 Days</button>
+        <button type="button" class="chip active" data-range="all">All</button>
+        <button type="button" class="chip" data-range="custom">Custom Range</button>
         <div id="customRangePanel" class="custom-range-panel" style="display:none">
           <input type="date" id="fromDate" class="date-in" aria-label="From date">
           <span class="range-arrow">→</span>
           <input type="date" id="toDate" class="date-in" aria-label="To date">
-          <button type="button" class="range-apply" onclick="applyCustom()">Apply</button>
+          <button type="button" class="range-apply" id="applyCustomRangeBtn">Apply</button>
         </div>
 
-        <div class="global-search-wrap"><input id="globalSearch" class="global-search" type="search" autocomplete="off" placeholder="Search person, phone, email, chat ID…" aria-label="Search current dashboard view" aria-controls="globalSearchResults" aria-expanded="false" oninput="onGlobalSearch(this.value)" onfocus="onGlobalSearch(this.value)" onkeydown="onGlobalSearchKeydown(event)"><div id="globalSearchResults" class="global-search-results" role="listbox"></div></div>
+        <div class="global-search-wrap"><input id="globalSearch" class="global-search" type="search" autocomplete="off" placeholder="Search person, phone, email, chat ID…" aria-label="Search current dashboard view" aria-controls="globalSearchResults" aria-expanded="false"><div id="globalSearchResults" class="global-search-results" role="listbox"></div></div>
         <div class="freshness" id="freshness" aria-live="polite"></div>
       </div>
     </header>
@@ -108,11 +108,11 @@
 </div>
 
 <!-- DRAWER -->
-<div id="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drawerTitle"><div class="drawer-bg" onclick="closeDrill()"></div>
+<div id="drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drawerTitle"><div class="drawer-bg"></div>
   <div class="drawer-panel" tabindex="-1">
     <div class="drawer-head">
       <div><div class="dt" id="drawerTitle"></div><div class="ds" id="drawerSub"></div></div>
-      <button class="drawer-close" aria-label="Close details" onclick="closeDrill()">✕</button>
+      <button class="drawer-close" aria-label="Close details">✕</button>
     </div>
     <div class="drawer-body" id="drawerBody"></div>
   </div>
