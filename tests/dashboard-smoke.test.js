@@ -17,12 +17,6 @@ function read(file) {
   return fs.readFileSync(path.join(root, file), 'utf8');
 }
 
-function finalInlineScript(html, file) {
-  const match = html.match(/<script>([\s\S]*)<\/script>\s*<\/body>/);
-  assert(match, `${file}: final inline script was not found`);
-  return match[1];
-}
-
 function staticIds(html) {
   const markup = html.replace(/<script\b[\s\S]*?<\/script>/gi, '');
   return [...markup.matchAll(/\bid\s*=\s*["']([^"']+)["']/gi)].map(match => match[1]);
@@ -37,7 +31,6 @@ function unzip(entry) {
 
 for (const file of productionFiles) {
   const html = read(file);
-  if (file === 'index.html') assert.doesNotThrow(() => new Function(finalInlineScript(html, file)), file + ': JavaScript syntax');
   const ids = staticIds(html);
   const duplicates = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
   assert.deepEqual(duplicates, [], `${file}: duplicate static IDs: ${duplicates.join(', ')}`);
@@ -47,6 +40,7 @@ for (const file of productionFiles) {
 
 const dashboard = read('index.html');
 const admin = read('admin/index.html');
+const dashboardScript = read('js/dashboard.js');
 const adminScript = read('js/admin.js');
 const dashboardHead = dashboard.slice(0, dashboard.indexOf('</head>'));
 const dashboardCss = read('css/dashboard.css');
@@ -54,6 +48,9 @@ const dashboardCss = read('css/dashboard.css');
 assert.match(dashboardHead, /href="css\/dashboard\.css"/, 'dashboard stylesheet link');
 assert.doesNotMatch(dashboardHead, /<style\b/i, 'dashboard must not retain an inline head stylesheet');
 assert.match(dashboardCss, /\.chat-exec-shell/, 'dashboard stylesheet content');
+assert.match(dashboard, /src="js\/dashboard\.js"/, 'dashboard script link');
+assert.doesNotMatch(dashboard, /<script>\s*[\s\S]*?<\/script>/i, 'dashboard must not retain inline application scripts');
+assert.doesNotThrow(() => new Function(dashboardScript), 'dashboard JavaScript syntax');
 assert.match(dashboard, /href="assets\/favicon\.png"/, 'dashboard shared favicon');
 assert.match(dashboard, /src="assets\/bits-pilani-digital-logo\.jpg"/, 'dashboard shared logo');
 assert.match(admin, /href="\.\.\/assets\/favicon\.png"/, 'admin shared favicon');
@@ -63,7 +60,7 @@ assert.doesNotMatch(dashboard + admin, /img-src 'self' data:/, 'production CSP m
 for (const asset of ['assets/favicon.png', 'assets/bits-pilani-digital-logo.jpg']) {
   assert.equal(fs.existsSync(path.join(root, asset)), true, `${asset}: shared asset exists`);
 }
-assert.match(dashboard, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
+assert.match(dashboardScript, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
 assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
 assert.match(admin, /src="\.\.\/js\/admin\.js"/, 'admin script link');
 assert.doesNotMatch(admin, /<style\b/i, 'admin must not retain inline styles');
@@ -83,10 +80,10 @@ const dashboardSandbox = {
   window: {addEventListener() {}, DATA_QUALITY: null}
 };
 dashboardSandbox.globalThis = dashboardSandbox;
-vm.runInNewContext(finalInlineScript(dashboard, 'index.html'), dashboardSandbox);
+vm.runInNewContext(dashboardScript, dashboardSandbox);
 assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('AANYAENC1payload'))", dashboardSandbox), true, 'encrypted payload detection');
 assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('PK\\x03\\x04plain-workbook'))", dashboardSandbox), false, 'plaintext workbook rejection');
-assert.match(dashboard, /if\(!isEncrypted\(bytes\)\)\{show\('dataPlaceholder'\);return;\}/, 'dashboard must reject unencrypted live data before parsing');
+assert.match(dashboardScript, /if\(!isEncrypted\(bytes\)\)\{show\('dataPlaceholder'\);return;\}/, 'dashboard must reject unencrypted live data before parsing');
 const regression = vm.runInNewContext('runAnyaRegressionChecks()', dashboardSandbox);
 assert.equal(regression.ok, true, 'built-in analytics regression fixture');
 
