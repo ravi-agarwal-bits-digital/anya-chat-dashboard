@@ -50,6 +50,8 @@ function formatSize(n){if(!n)return '—';if(n<1024)return n+' B';if(n<1024*1024
 function setupUpload(){
   const dz=$('dropZone'),fi=$('fileInput');
   fi.addEventListener('change',e=>setFile(e.target.files[0]));
+  dz.addEventListener('click',()=>fi.click());
+  dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click();}});
   $('publishConfirm').addEventListener('change',updatePublishReady);
   ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('over');}));
   ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('over');}));
@@ -201,5 +203,10 @@ async function publishData(){
 window.addEventListener('DOMContentLoaded',()=>{
   const brandLogo=document.querySelector('#adminGate .logoBox img')?.getAttribute('src')||'';
   if(brandLogo)document.querySelectorAll('[data-brand-logo]').forEach(img=>img.setAttribute('src',brandLogo));
+  $('unlockAdminBtn')?.addEventListener('click',unlockAdmin);
+  $('adminPassword')?.addEventListener('keydown',e=>{if(e.key==='Enter')unlockAdmin();});
+  $('publishBtn')?.addEventListener('click',publishData);
+  $('saveConnectionSettingsBtn')?.addEventListener('click',saveConnectionSettings);
+  $('clearSessionTokenBtn')?.addEventListener('click',clearSessionToken);
   clearLegacyTokenVault();setupUpload();setupTokenMode();checkExistingAdminSession();
 });

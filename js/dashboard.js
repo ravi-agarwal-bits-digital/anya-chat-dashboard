@@ -35,9 +35,32 @@ function checkExistingSession(){
   if(au&&Date.now()-at<SECURITY.SESSION_TIMEOUT_MINS*60*1000){window.DECRYPT_PASSPHRASE=sessionStorage.getItem('dk')||'';unlockDashboard();return true;}
   return false;
 }
+function bindDashboardEvents(){
+  $('unlockDashboardBtn')?.addEventListener('click',checkPassword);
+  $('loginPassword')?.addEventListener('keydown',e=>{if(e.key==='Enter')checkPassword();});
+  $('retryDataLoadBtn')?.addEventListener('click',retryDataLoad);
+  document.querySelectorAll('.chip[data-range]').forEach(el=>el.addEventListener('click',()=>setRange(el.dataset.range,el)));
+  $('applyCustomRangeBtn')?.addEventListener('click',applyCustom);
+  const globalSearch=$('globalSearch');
+  globalSearch?.addEventListener('input',e=>onGlobalSearch(e.target.value));
+  globalSearch?.addEventListener('focus',e=>onGlobalSearch(e.target.value));
+  globalSearch?.addEventListener('keydown',onGlobalSearchKeydown);
+  document.querySelector('.drawer-bg')?.addEventListener('click',closeDrill);
+  document.querySelector('.drawer-close')?.addEventListener('click',closeDrill);
+  document.addEventListener('input',e=>{if(e.target.matches('[data-action="explorer-search"]'))onSearch(e.target.value);});
+  document.addEventListener('click',e=>{
+    const action=e.target.closest('[data-action]');if(!action)return;
+    if(action.dataset.action==='export-management-summary')exportManagementSummaryPDF();
+    else if(action.dataset.action==='export-leads')exportLeads();
+    else if(action.dataset.action==='export-callbacks')exportCallbacks();
+    else if(action.dataset.action==='export-csv')exportCSV();
+    else if(action.dataset.action==='export-drill')exportDrill();
+  });
+}
 window.addEventListener('DOMContentLoaded',()=>{
   const brandLogo=document.querySelector('.login-logo-img')?.getAttribute('src')||'';
   if(brandLogo)document.querySelectorAll('[data-brand-logo]').forEach(img=>img.setAttribute('src',brandLogo));
+  bindDashboardEvents();
   checkExistingSession();
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrill();else if(e.key==='Tab')trapDrawerFocus(e);});
 });
@@ -405,7 +428,7 @@ function secManagementSummary(){
   const m=computeManagementMetrics(),riskClass=m.gapPct>=30?'risk':'good',priority=m.hot+m.warm;
   const d=m.deltas;
   return `<section id="sec-management"><div class="panel management-panel">
-    <div class="management-head"><div><div class="management-kicker">Management Summary</div><div class="management-title">CEO-ready view of chat demand</div><div class="management-range">${esc(selectedRangeText())} · ${m.n.toLocaleString()} chats across ${m.days} active day${m.days===1?'':'s'} · ${(window.DATA_QUALITY?.validRows||RECORDS.length).toLocaleString()} analysed</div></div><button class="management-export" onclick="exportManagementSummaryPDF()">Export CEO Summary</button></div>
+    <div class="management-head"><div><div class="management-kicker">Management Summary</div><div class="management-title">CEO-ready view of chat demand</div><div class="management-range">${esc(selectedRangeText())} · ${m.n.toLocaleString()} chats across ${m.days} active day${m.days===1?'':'s'} · ${(window.DATA_QUALITY?.validRows||RECORDS.length).toLocaleString()} analysed</div></div><button class="management-export" data-action="export-management-summary">Export CEO Summary</button></div>
     <div class="management-kpi-strip">
       <div class="management-kpi"><div class="v">${m.n.toLocaleString()}</div><div class="l">Total chats</div><div class="delta ${d.chats.cls}">${d.chats.text}</div></div>
       <div class="management-kpi good"><div class="v">${m.engagedPct}%</div><div class="l">Engaged rate</div><div class="delta ${d.engaged.cls}">${d.engaged.text}</div></div>
@@ -498,7 +521,7 @@ function secLeads(){
     <td>${p.programs.length?esc(p.programs[0]):'<span style="color:var(--faint)">—</span>'}</td></tr>`).join('');
   return `<section id="sec-leads"><div class="shead"><span class="n">05</span><h2>Priority prospects</h2></div>
     <div class="sdesc">Contactable people ranked by a transparent score: callback requested (+45), depth, questions asked, repeat visits (+15), known program. Click a lead to open their full history and contact. <b>High priority ≥65, Medium priority ≥38.</b></div>
-    <div class="panel"><div class="tools"><div class="cap" style="margin:0">Top ${leads.length} of ${PEOPLE.filter(p=>p.phone||p.email).length} contactable leads</div><button class="exp-btn" onclick="exportLeads()">Export leads CSV (full contact)</button></div>
+    <div class="panel"><div class="tools"><div class="cap" style="margin:0">Top ${leads.length} of ${PEOPLE.filter(p=>p.phone||p.email).length} contactable leads</div><button class="exp-btn" data-action="export-leads">Export leads CSV (full contact)</button></div>
     <div class="tbl-scroll"><table><thead><tr><th>Priority</th><th>Lead</th><th>Score</th><th>Chats</th><th>Depth</th><th>Callback</th><th>Top program</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
 }
 
@@ -525,7 +548,7 @@ function secCallbacks(){
     <td class="mono" style="color:var(--faint);white-space:nowrap">requested ${r.created.day} ${MONN[r.created.mon]}</td></tr>`).join('');
   return `<section id="sec-callbacks"><div class="shead"><span class="n">07</span><h2>Callback requests</h2></div>
     <div class="sdesc">Every prospect who asked for a callback, with the detected callback window or explicit request. This is your call sheet — click a row to read the conversation, or export with full contact for the team.</div>
-    <div class="panel"><div class="tools"><div class="cap" style="margin:0">${cbs.length} callback${cbs.length===1?'':'s'} requested</div><button class="exp-btn" onclick="exportCallbacks()">Export call sheet CSV (full contact)</button></div>
+    <div class="panel"><div class="tools"><div class="cap" style="margin:0">${cbs.length} callback${cbs.length===1?'':'s'} requested</div><button class="exp-btn" data-action="export-callbacks">Export call sheet CSV (full contact)</button></div>
     <div class="tbl-scroll"><table><thead><tr><th>Detected date</th><th>Time slot</th><th>Name</th><th>Phone</th><th>Email</th><th>Program</th><th>Requested</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
 }
 
@@ -615,7 +638,7 @@ function secDepth(){
 
 /* 12 explorer */
 function secExplorer(){
-  return `<section id="sec-explorer"><div class="shead"><span class="n">12</span><h2>Chat explorer</h2></div><div class="sdesc">Every chat in range. Search across name, phone, email, chat ID, programme, summary and questions.</div><div class="panel"><div class="tools"><input class="search" id="explSearch" placeholder="Search person, phone, email, chat ID, topic…" oninput="onSearch(this.value)"><button class="exp-btn" onclick="exportCSV()">Export CSV (full values)</button></div><div class="tbl-scroll"><table id="explTable"></table></div></div></section>`;
+  return `<section id="sec-explorer"><div class="shead"><span class="n">12</span><h2>Chat explorer</h2></div><div class="sdesc">Every chat in range. Search across name, phone, email, chat ID, programme, summary and questions.</div><div class="panel"><div class="tools"><input class="search" id="explSearch" placeholder="Search person, phone, email, chat ID, topic…" data-action="explorer-search"><button class="exp-btn" data-action="export-csv">Export CSV (full values)</button></div><div class="tbl-scroll"><table id="explTable"></table></div></div></section>`;
 }
 function explorerRows(){
   let rows=VIEW.slice();
@@ -701,7 +724,7 @@ function openDrill(kind,arg){
     <div class="kv"><span class="k">Callback</span><span class="v">${p.callback?'requested':'not detected'}</span></div>
     <div style="font-size:11px;color:var(--faint);margin-top:8px">All their chats are listed below. Use the leads / call-sheet CSV for CRM import.</div></div>`;}
   const list=recs.length?recs.slice().sort((a,b)=>b.key-a.key).map(r=>chatCard(r,opts)).join(''):`<div class="empty">No chats here.</div>`;
-  $("drawerBody").innerHTML=`<div class="drawer-tools"><span class="cap" style="margin:0">${recs.length} chat${recs.length===1?'':'s'}</span>${recs.length?`<button class="exp-btn" onclick="exportDrill()">Export these as CSV</button>`:''}</div>${head}${list}`;
+  $("drawerBody").innerHTML=`<div class="drawer-tools"><span class="cap" style="margin:0">${recs.length} chat${recs.length===1?'':'s'}</span>${recs.length?`<button class="exp-btn" data-action="export-drill">Export these as CSV</button>`:''}</div>${head}${list}`;
   $("drawerBody").onclick=e=>{const b=e.target.closest('[data-act="dtoggle"]');if(!b)return;const w=b.closest('.card-chat').querySelector('.dtrans');if(!w.dataset.loaded){const rec=RECORDS.find(r=>r.idx===Number(w.getAttribute('data-cidx')));if(rec){w.innerHTML=transcriptHtml(rec);w.dataset.loaded='1';}}w.style.display=w.style.display==='none'?'block':'none';b.textContent=w.style.display==='none'?'read transcript':'hide transcript';};
   LAST_FOCUS=document.activeElement;const drawer=$("drawer");setDashboardBackgroundInert(true);drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');setTimeout(()=>drawer.querySelector('.drawer-panel')?.focus(),0);
 }
