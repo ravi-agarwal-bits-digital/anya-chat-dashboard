@@ -64,6 +64,8 @@ for (const asset of ['assets/favicon.png', 'assets/bits-pilani-digital-logo.jpg'
   assert.equal(fs.existsSync(path.join(root, asset)), true, `${asset}: shared asset exists`);
 }
 assert.match(dashboardScript, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
+assert.doesNotMatch(dashboardScript, /sessionStorage\.setItem\('dk'/, 'dashboard must not persist its passphrase');
+assert.doesNotMatch(dashboardScript, /sessionStorage\.clear\(\)/, 'dashboard lock must not clear unrelated session state');
 assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
 assert.match(admin, /src="\.\.\/js\/admin\.js"/, 'admin script link');
 assert.doesNotMatch(admin, /<style\b/i, 'admin must not retain inline styles');
@@ -86,6 +88,13 @@ const dashboardSandbox = {
 };
 dashboardSandbox.globalThis = dashboardSandbox;
 vm.runInNewContext(dashboardScript, dashboardSandbox);
+const dashboardSessionKeys = new Set(['auth_time', 'auth_user', 'dk', 'admin-session']);
+dashboardSandbox.sessionStorage = {removeItem(key) { dashboardSessionKeys.delete(key); }};
+dashboardSandbox.window.DECRYPT_PASSPHRASE = webcrypto.randomUUID();
+assert.equal(vm.runInNewContext('checkExistingSession()', dashboardSandbox), false, 'dashboard requires login after refresh');
+assert.equal(dashboardSessionKeys.has('auth_time') || dashboardSessionKeys.has('auth_user') || dashboardSessionKeys.has('dk'), false, 'dashboard clears legacy auth state after refresh');
+assert.equal(dashboardSessionKeys.has('admin-session'), true, 'dashboard preserves unrelated session state');
+assert.equal(dashboardSandbox.window.DECRYPT_PASSPHRASE, '', 'dashboard clears its in-memory passphrase when locking');
 assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('AANYAENC1payload'))", dashboardSandbox), true, 'encrypted payload detection');
 assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('PK\\x03\\x04plain-workbook'))", dashboardSandbox), false, 'plaintext workbook rejection');
 assert.match(dashboardScript, /if\(!isEncrypted\(bytes\)\)\{show\('dataPlaceholder'\);return;\}/, 'dashboard must reject unencrypted live data before parsing');
