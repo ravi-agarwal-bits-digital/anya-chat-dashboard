@@ -8,7 +8,6 @@ const MAX_FILE_BYTES=90*1024*1024;
 const REQUIRED_COLS=['Chat Created At (IST)','Chat ID','Agent Messages','Total Tokens','Summary','Full Conversation'];
 const REPO_SETTINGS_KEY='anya_chat_admin_repo_settings_v2';
 const SESSION_TOKEN_KEY='anya_chat_admin_github_token_session_v2';
-const ADMIN_SESSION_MINS=720;
 const ADMIN_AUTH_TIME_KEY='anya_chat_admin_auth_time_v2';
 const ADMIN_PASSPHRASE_KEY='anya_chat_admin_passphrase_session_v2';
 let ADMIN_PASSPHRASE='';
@@ -27,19 +26,16 @@ function showAdminApp(){
   loadSessionToken();
   refreshVaultState();
 }
-function rememberAdminSession(passphrase){sessionStorage.setItem(ADMIN_AUTH_TIME_KEY,Date.now().toString());sessionStorage.setItem(ADMIN_PASSPHRASE_KEY,passphrase);}
+function clearAdminPassphraseSession(){sessionStorage.removeItem(ADMIN_AUTH_TIME_KEY);sessionStorage.removeItem(ADMIN_PASSPHRASE_KEY);}
 function checkExistingAdminSession(){
-  const pass=sessionStorage.getItem(ADMIN_PASSPHRASE_KEY)||'';
-  const authTime=Number(sessionStorage.getItem(ADMIN_AUTH_TIME_KEY)||0);
-  const timeout=ADMIN_SESSION_MINS*60*1000;
-  if(pass&&authTime&&Date.now()-authTime<timeout){ADMIN_PASSPHRASE=pass;rememberAdminSession(pass);showAdminApp();return true;}
-  sessionStorage.removeItem(ADMIN_AUTH_TIME_KEY);sessionStorage.removeItem(ADMIN_PASSPHRASE_KEY);return false;
+  clearAdminPassphraseSession();
+  return false;
 }
 async function unlockAdmin(){
   const pwd=$('adminPassword').value||'';
   if(!pwd){showStatus('gateStatus','Please enter the admin password.','err');return;}
   if(await sha256(pwd)!==ADMIN_PASSWORD_HASH){showStatus('gateStatus','Incorrect password.','err');$('adminPassword').value='';return;}
-  ADMIN_PASSPHRASE=pwd;rememberAdminSession(pwd);showAdminApp();
+  ADMIN_PASSPHRASE=pwd;clearAdminPassphraseSession();showAdminApp();
 }
 function bytesToBase64(bytes){let binary='';const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk){binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));}return btoa(binary);}
 function base64ToBytes(b64){const bin=atob(b64);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}

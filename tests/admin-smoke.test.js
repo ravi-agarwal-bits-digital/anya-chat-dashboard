@@ -16,6 +16,7 @@ assert.doesNotMatch(admin, /<style\b/i, 'admin must not retain inline styles');
 assert.doesNotMatch(admin, /<script>([\s\S]*?)<\/script>/i, 'admin must not retain inline application scripts');
 assert.doesNotMatch(adminScript, /saveEncryptedToken|unlockSavedToken|TOKEN_VAULT_KEY/, 'admin token vault must not persist tokens');
 assert.doesNotMatch(adminScript, /writeBackup|makeBackupPath|backupFolder/, 'admin must retain only the live workbook');
+assert.doesNotMatch(adminScript, /sessionStorage\.setItem\(ADMIN_PASSPHRASE_KEY/, 'admin must not persist its passphrase');
 assert.match(adminScript, /const DATA_MAGIC='AANYAENC1'/, 'admin encryption compatibility marker');
 assert.match(adminScript, /GitHub verification did not match the saved/, 'admin must verify published file metadata');
 assert.match(adminScript, /MAX_FILE_BYTES=90\*1024\*1024/, 'admin must protect GitHub file-size limits');
@@ -33,6 +34,11 @@ const sandbox = {
 };
 sandbox.globalThis = sandbox;
 vm.runInNewContext(adminScript, sandbox);
+const adminSessionKeys = new Set(['anya_chat_admin_auth_time_v2', 'anya_chat_admin_passphrase_session_v2', 'anya_chat_admin_github_token_session_v2']);
+sandbox.sessionStorage = {removeItem(key) { adminSessionKeys.delete(key); }};
+assert.equal(vm.runInNewContext('checkExistingAdminSession()', sandbox), false, 'admin requires login after refresh');
+assert.equal(adminSessionKeys.has('anya_chat_admin_auth_time_v2') || adminSessionKeys.has('anya_chat_admin_passphrase_session_v2'), false, 'admin clears legacy passphrase state after refresh');
+assert.equal(adminSessionKeys.has('anya_chat_admin_github_token_session_v2'), true, 'admin preserves the user-selected session token');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM IST','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", sandbox), 1, 'dashboard-compatible usable chat quality detection');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'not a date','Chat ID':'chat-1','Full Conversation':''}]).usableRows", sandbox), 0, 'unusable chat quality detection');
 
