@@ -11,6 +11,10 @@ Static GitHub Pages dashboard and admin publisher for BITS Pilani Digital chat a
 
 The dashboard is intentionally static: data is decrypted in the browser and no end-user upload control is exposed. The admin publisher retains only the live encrypted workbook. The visible product name is **Anya**; the encrypted payload format remains `AANYAENC1` for compatibility.
 
+## Conversation-plan runway
+
+The dashboard’s Commercial Runway uses the agreed contract: 65,000 included conversations annually, a ₹2,00,000 conversation bundle, a ₹2,00,000 annual platform fee, and ₹1,00,000 per additional 25,000 conversations. It calculates billable conversations as `ceil(Agent Messages / 5)` for each unique exported session, reflecting up to five user–Anya exchanges per billable conversation. The annualised figure uses the all-time published-data run rate and is an estimate, not an invoice.
+
 ## Workbook contract
 
 The admin console accepts the `Chats Export` worksheet with these required columns:

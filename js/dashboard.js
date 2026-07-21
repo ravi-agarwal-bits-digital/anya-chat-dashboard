@@ -7,6 +7,7 @@ let SHEET=DEFAULT_SHEET;
 let PUBLISHED_AT='';
 let CONFIG_META={schemaVersion:0,sourceFile:'',recordCount:0,fileSize:0};
 const SECURITY={PASSWORD_HASH:"2f8f998b75f4bfd79e4b9a0760d82905cfbe1fccb942ecfd6d1e8999e04c021f",SESSION_TIMEOUT_MINS:30};
+const COMMERCIAL_PLAN=Object.freeze({includedConversations:65000,bundleCost:200000,platformCost:200000,overageBlockConversations:25000,overageBlockCost:100000,agentMessagesPerConversation:5});
 
 /* ---------- crypto / auth ---------- */
 async function sha256(t){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');}
@@ -382,7 +383,7 @@ function render(){
   const rowMismatch=CONFIG_META.recordCount&&q.sourceRows&&CONFIG_META.recordCount!==q.sourceRows?` · config expected ${CONFIG_META.recordCount.toLocaleString()} rows`:'';
   $("freshness").textContent=`Showing ${VIEW.length.toLocaleString()} of ${RECORDS.length.toLocaleString()} chats · ${publish}${sourceMeta}${excluded?` · ${excluded} excluded in quality checks`:''}${rowMismatch}`;
   if(!VIEW.length){$("report").innerHTML=`<div class="panel empty" style="margin-top:30px">No chats in this range. The data runs ${fromKeyLabel(DATA_MIN)} to ${fromKeyLabel(DATA_MAX)}.</div>`;return;}
-  $("report").innerHTML=[secManagementSummary(),secActionQueue(),secAnswerGap(),secFunnel(),secKPIs(),secQuestions(),secLeads(),secSerial(),secCallbacks(),secDropoff(),secVolume(),secPrograms(),secDepth(),secExplorer()].join('');
+  $("report").innerHTML=[secManagementSummary(),secCommercialUsage(),secActionQueue(),secAnswerGap(),secFunnel(),secKPIs(),secQuestions(),secLeads(),secSerial(),secCallbacks(),secDropoff(),secVolume(),secPrograms(),secDepth(),secExplorer()].join('');
   bindInteractions();syncChatShellNav();decorateResponsiveTables();makeDashboardInteractive();
 }
 
@@ -424,6 +425,21 @@ function computeManagementMetrics(){
   if(current.deltas.gap.cls==='up')current.deltas.gap.cls='down';else if(current.deltas.gap.cls==='down')current.deltas.gap.cls='up';
   return current;
 }
+function computeCommercialUsage(){
+  const plan=COMMERCIAL_PLAN;
+  const billableConversations=RECORDS.reduce((total,r)=>total+Math.ceil(Math.max(0,Number(r.agentMsgs)||0)/plan.agentMessagesPerConversation),0);
+  const coverageDays=daysInclusive(DATA_MIN,DATA_MAX);
+  const usedPct=plan.includedConversations?billableConversations/plan.includedConversations:0;
+  const remaining=Math.max(0,plan.includedConversations-billableConversations);
+  const projectedAnnual=coverageDays?Math.round(billableConversations/coverageDays*365):0;
+  const projectedOverage=Math.max(0,projectedAnnual-plan.includedConversations);
+  const projectedTopUps=projectedOverage?Math.ceil(projectedOverage/plan.overageBlockConversations):0;
+  return {
+    ...plan,billableConversations,coverageDays,usedPct,remaining,projectedAnnual,projectedOverage,projectedTopUps,
+    bundleAllocation:billableConversations/plan.includedConversations*plan.bundleCost,
+    effectiveAllocation:billableConversations/plan.includedConversations*(plan.bundleCost+plan.platformCost)
+  };
+}
 function secManagementSummary(){
   const m=computeManagementMetrics(),riskClass=m.gapPct>=30?'risk':'good',priority=m.hot+m.warm;
   const d=m.deltas;
@@ -439,6 +455,25 @@ function secManagementSummary(){
     <div class="management-grid"><div class="management-story">Anya handled <b>${m.n.toLocaleString()} conversations</b>. Immediate operating priorities are <b>${m.cb.toLocaleString()} callback requests</b>, <b>${m.recoverable.toLocaleString()} high-intent chats without captured contact</b>, and <b>${priority} high-priority prospects</b>. Top demand is <b>${esc(m.topTheme[0])}</b>; the first knowledge improvement area is <span class="${riskClass}">${esc(m.highestRisk)}</span>.</div>
       <div class="management-points"><div class="management-point"><b>Call first</b><span>${m.cb.toLocaleString()} callback requests detected for counsellor review.</span></div><div class="management-point"><b>Recover next</b><span>${m.recoverable.toLocaleString()} high-intent conversations ended without usable contact details.</span></div><div class="management-point"><b>Fix knowledge</b><span>${m.gapPct}% answer-gap rate; start with ${esc(m.topGap[0])}.</span></div></div>
     </div></div></section>`;
+}
+function secCommercialUsage(){
+  const c=computeCommercialUsage();
+  const projectedWithinPlan=c.projectedAnnual<=c.includedConversations;
+  const fmtRupees=value=>`₹${Math.round(value).toLocaleString('en-IN')}`;
+  const coverage=c.coverageDays?`${fromKeyLabel(DATA_MIN)} – ${fromKeyLabel(DATA_MAX)} · ${c.coverageDays} calendar days`:'No dated chats available';
+  const projectionText=projectedWithinPlan?`${(c.includedConversations-c.projectedAnnual).toLocaleString()} projected buffer`:`${c.projectedOverage.toLocaleString()} projected over plan`;
+  const projectionClass=projectedWithinPlan?'good':'risk';
+  return `<section id="sec-commercial"><div class="commercial-panel">
+    <div class="commercial-head"><div><div class="commercial-kicker">Conversation plan · all published data</div><h2>Commercial runway</h2><p>${esc(coverage)}. This counter is intentionally independent of the selected analytics date filter.</p></div><div class="commercial-status ${projectionClass}">${projectedWithinPlan?'Within annual plan':'Top-up likely'}<span>${projectionText}</span></div></div>
+    <div class="commercial-progress" aria-label="${c.billableConversations.toLocaleString()} of ${c.includedConversations.toLocaleString()} included conversations used"><div class="commercial-progress-top"><span><b>${c.billableConversations.toLocaleString()}</b> billable conversations used</span><span>${Math.round(c.usedPct*1000)/10}% of ${c.includedConversations.toLocaleString()} included</span></div><div class="commercial-track"><i style="width:${Math.min(100,c.usedPct*100)}%"></i></div><div class="commercial-progress-bottom"><span>${c.remaining.toLocaleString()} conversations remain</span><span>1 conversation = up to 5 user–Anya exchanges</span></div></div>
+    <div class="commercial-grid">
+      <div class="commercial-metric"><span>Annualised run rate</span><b>${c.projectedAnnual.toLocaleString()}</b><small>At the observed daily rate</small></div>
+      <div class="commercial-metric"><span>Bundle allocation used</span><b>${fmtRupees(c.bundleAllocation)}</b><small>Of the ₹2,00,000 conversation bundle</small></div>
+      <div class="commercial-metric"><span>Effective allocation</span><b>${fmtRupees(c.effectiveAllocation)}</b><small>Includes the ₹2,00,000 annual platform fee</small></div>
+      <div class="commercial-metric commercial-contract"><span>Contract terms</span><b>₹4,00,000<span class="commercial-year">/ year</span></b><small>65,000 conversations included · ₹1,00,000 per additional 25,000</small></div>
+    </div>
+    <div class="commercial-note"><b>How this is counted.</b> Each unique Chat ID is treated as one exported session. Billable conversations are calculated per session as <span class="mono">ceil(Anya replies ÷ 5)</span>; a five-exchange conversation contains up to five user and five Anya messages. The annualised figure extrapolates the published-data run rate and is not an invoice forecast.</div>
+  </div></section>`;
 }
 function secActionQueue(){
   const m=computeManagementMetrics();

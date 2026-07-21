@@ -64,6 +64,9 @@ for (const asset of ['assets/favicon.png', 'assets/bits-pilani-digital-logo.jpg'
   assert.equal(fs.existsSync(path.join(root, asset)), true, `${asset}: shared asset exists`);
 }
 assert.match(dashboardScript, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
+assert.match(dashboardScript, /includedConversations:65000/, 'dashboard commercial plan includes the contracted conversation allowance');
+assert.match(dashboardScript, /overageBlockConversations:25000/, 'dashboard commercial plan includes the contracted top-up block');
+assert.match(dashboardScript, /Math\.ceil\(Math\.max\(0,Number\(r\.agentMsgs\)\|\|0\)\/plan\.agentMessagesPerConversation\)/, 'billable conversations round up per session, not across all rows');
 assert.doesNotMatch(dashboardScript, /sessionStorage\.setItem\('dk'/, 'dashboard must not persist its passphrase');
 assert.doesNotMatch(dashboardScript, /sessionStorage\.clear\(\)/, 'dashboard lock must not clear unrelated session state');
 assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
@@ -100,6 +103,15 @@ assert.equal(vm.runInNewContext("isEncrypted(new TextEncoder().encode('PK\\x03\\
 assert.match(dashboardScript, /if\(!isEncrypted\(bytes\)\)\{show\('dataPlaceholder'\);return;\}/, 'dashboard must reject unencrypted live data before parsing');
 const regression = vm.runInNewContext('runAnyaRegressionChecks()', dashboardSandbox);
 assert.equal(regression.ok, true, 'built-in analytics regression fixture');
+const commercialUsage = vm.runInNewContext(`(()=>{
+  RECORDS=[{agentMsgs:1},{agentMsgs:5},{agentMsgs:6},{agentMsgs:0}];
+  DATA_MIN=20260701;DATA_MAX=20260710;
+  return computeCommercialUsage();
+})()`, dashboardSandbox);
+assert.equal(commercialUsage.billableConversations, 4, 'commercial usage rounds each chat session up to five Anya replies');
+assert.equal(commercialUsage.remaining, 64996, 'commercial usage tracks remaining included conversations');
+assert.equal(commercialUsage.projectedAnnual, 146, 'commercial usage annualises from the dated source coverage');
+assert.match(dashboardScript, /id="sec-commercial"/, 'dashboard renders the commercial runway section');
 
 const adminSandbox = {
   Date, Math, RegExp, Set, TextEncoder, Uint8Array, crypto: webcrypto,
