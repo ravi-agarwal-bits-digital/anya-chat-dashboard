@@ -126,6 +126,15 @@ assert.match(dashboardScript, /id="sec-commercial"/, 'dashboard renders the comm
 assert.match(dashboardScript, /data-action="jump-commercial"/, 'CEO summary links to the commercial runway');
 assert.match(dashboardScript, /case'commercial-all'/, 'commercial raw-session cards open the existing drill-down drawer');
 assert.match(dashboardScript, /case'commercial-band'/, 'commercial billing bands open the existing drill-down drawer');
+const programmeConversion = vm.runInNewContext(`programConversionMetrics([
+  {programs:['Data Science & AI'],questions:[{},{}],gapCount:1,contactCaptured:true,callbackBooked:true,highIntent:true},
+  {programs:['Data Science & AI'],questions:[{}],gapCount:1,contactCaptured:false,callbackBooked:false,highIntent:true},
+  {programs:['AI / ML'],questions:[],gapCount:0,contactCaptured:false,callbackBooked:false,highIntent:false}
+])`, dashboardSandbox);
+const dataScienceConversion = programmeConversion.find(row => row.name === 'Data Science & AI');
+assert.deepEqual(JSON.parse(JSON.stringify(dataScienceConversion)), {name:'Data Science & AI',chats:2,contactCaptured:1,callbacks:1,highIntentNoContact:1,questions:3,answerGaps:2}, 'programme conversion metrics retain demand, capture, callbacks, leakage and answer gaps');
+assert.match(dashboardScript, /program-conversion-panel/, 'dashboard renders the focused programme conversion matrix');
+assert.match(dashboardScript, /data-drill="program"/, 'programme conversion rows use the existing programme drill-down');
 const drawerTranscript = vm.runInNewContext("transcriptHtml({summary:'summary appears once',conv:'User: Hello\\nAgent: Hi'},false)", dashboardSandbox);
 assert.doesNotMatch(drawerTranscript, /summary appears once/, 'drawer transcript does not duplicate the chat-card summary');
 assert.match(drawerTranscript, /t-turn-user/, 'drawer transcript marks prospect turns');
