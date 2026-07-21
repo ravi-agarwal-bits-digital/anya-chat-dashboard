@@ -126,6 +126,10 @@ assert.match(dashboardScript, /id="sec-commercial"/, 'dashboard renders the comm
 assert.match(dashboardScript, /data-action="jump-commercial"/, 'CEO summary links to the commercial runway');
 assert.match(dashboardScript, /case'commercial-all'/, 'commercial raw-session cards open the existing drill-down drawer');
 assert.match(dashboardScript, /case'commercial-band'/, 'commercial billing bands open the existing drill-down drawer');
+const drawerTranscript = vm.runInNewContext("transcriptHtml({summary:'summary appears once',conv:'User: Hello\\nAgent: Hi'},false)", dashboardSandbox);
+assert.doesNotMatch(drawerTranscript, /summary appears once/, 'drawer transcript does not duplicate the chat-card summary');
+assert.match(drawerTranscript, /t-turn-user/, 'drawer transcript marks prospect turns');
+assert.match(drawerTranscript, /t-turn-agent/, 'drawer transcript marks Anya turns');
 
 const adminSandbox = {
   Date, Math, RegExp, Set, TextEncoder, Uint8Array, crypto: webcrypto,
