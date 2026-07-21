@@ -654,18 +654,33 @@ function hourChart(hours){
 }
 
 /* 10 programs */
+function programConversionMetrics(records){
+  return PROGRAMS.map(([name])=>{
+    const chats=records.filter(r=>r.programs.includes(name));
+    const questions=chats.reduce((sum,r)=>sum+r.questions.length,0);
+    const answerGaps=chats.reduce((sum,r)=>sum+r.gapCount,0);
+    const contactCaptured=chats.filter(r=>r.contactCaptured).length;
+    return {name,chats:chats.length,contactCaptured,callbacks:chats.filter(r=>r.callbackBooked).length,highIntentNoContact:chats.filter(r=>r.highIntent&&!r.contactCaptured).length,questions,answerGaps};
+  }).filter(row=>row.chats).sort((a,b)=>b.chats-a.chats);
+}
 function secPrograms(){
   const prog={};PROGRAMS.forEach(p=>prog[p[0]]=0);let ug=0,pg=0;
   VIEW.forEach(r=>{r.programs.forEach(p=>prog[p]++);if(r.level==='UG')ug++;else if(r.level==='PG')pg++;});
   const rows=Object.entries(prog).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);const mx=Math.max(1,...rows.map(p=>p[1]));
   const bars=rows.length?rows.map(([nm,v])=>`<div class="bar clk" data-drill="program" data-arg="${esc(nm)}"><div class="top"><span class="nm">${esc(nm)}</span><span class="ct">${v} chats · ${pct(v,VIEW.length)}%</span></div><div class="track"><div class="seg one" style="width:${Math.round(100*v/mx)}%"></div></div></div>`).join(''):`<div class="empty">No program mentions.</div>`;
   const lt=ug+pg,ugw=lt?Math.round(100*ug/lt):0;
+  const conversion=programConversionMetrics(VIEW);
+  const conversionRows=conversion.length?conversion.map(row=>{
+    const gapRate=row.questions?pct(row.answerGaps,row.questions):null;
+    return `<button type="button" class="program-conversion-row clk" data-drill="program" data-arg="${esc(row.name)}"><span class="program-conversion-name"><b>${esc(row.name)}</b><small>${row.chats} tagged chat${row.chats===1?'':'s'}</small></span><span><b>${pct(row.contactCaptured,row.chats)}%</b><small>contact capture</small></span><span><b>${row.callbacks}</b><small>callbacks</small></span><span class="${row.highIntentNoContact?'risk':''}"><b>${row.highIntentNoContact}</b><small>high-intent, no contact</small></span><span class="${gapRate!==null&&gapRate>=30?'risk':''}"><b>${gapRate===null?'—':gapRate+'%'}</b><small>answer gaps${row.questions?' of questions':''}</small></span><i>inspect ↗</i></button>`;
+  }).join(''):`<div class="empty">No programme signals in this range.</div>`;
   return `<section id="sec-programs"><div class="shead"><span class="n">10</span><h2>Program interest</h2></div>
     <div class="sdesc">Which programs and which level prospects come asking about. Click to drill.</div>
     <div class="grid2"><div class="panel"><h4>By program area</h4><div class="cap">Share of chats mentioning each.</div>${bars}</div>
     <div class="panel"><h4>Undergraduate vs postgraduate</h4><div class="cap">${lt} chats expressed a clear level.</div>
     ${lt?`<div class="track" style="height:30px;border-radius:8px;margin:14px 0 12px"><div class="seg blu clk" data-drill="level" data-arg="UG" style="width:${ugw}%"></div><div class="seg one clk" data-drill="level" data-arg="PG" style="width:${100-ugw}%"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:13px"><span class="clk" data-drill="level" data-arg="UG"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--blue);margin-right:5px"></i>UG <b>${ug}</b> (${ugw}%)</span><span class="clk" data-drill="level" data-arg="PG"><b>${pg}</b> (${100-ugw}%) PG <i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--gold);margin-left:5px"></i></span></div>`:`<div class="empty">No level signal.</div>`}</div></div></section>`;
+    <div style="display:flex;justify-content:space-between;font-size:13px"><span class="clk" data-drill="level" data-arg="UG"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--blue);margin-right:5px"></i>UG <b>${ug}</b> (${ugw}%)</span><span class="clk" data-drill="level" data-arg="PG"><b>${pg}</b> (${100-ugw}%) PG <i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--gold);margin-left:5px"></i></span></div>`:`<div class="empty">No level signal.</div>`}</div></div>
+    <div class="panel program-conversion-panel"><div class="program-conversion-head"><div><h4>Programme conversion</h4><div class="cap">Demand, capture and unresolved intent—by tagged programme.</div></div><span>Click a row to inspect chats</span></div><div class="program-conversion-list">${conversionRows}</div><div class="program-conversion-note">A chat can match more than one programme, so tagged-chat totals are not additive. Answer-gap rate is unanswered or deflected questions out of questions asked.</div></div></section>`;
 }
 
 /* 11 depth */
