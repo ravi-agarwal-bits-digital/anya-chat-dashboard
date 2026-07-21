@@ -35,6 +35,7 @@ Run:
 ```bash
 node tests/dashboard-smoke.test.js
 node tests/admin-smoke.test.js
+node tests/interaction-smoke.test.js
 git diff --check
 ```
 
