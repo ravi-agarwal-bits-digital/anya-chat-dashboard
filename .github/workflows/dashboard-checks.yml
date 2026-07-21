@@ -11,14 +11,19 @@ permissions:
 jobs:
   dashboard-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install browser test dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
       - name: Run dashboard and admin smoke checks
         run: |
           node tests/dashboard-smoke.test.js
           node tests/admin-smoke.test.js
           node tests/interaction-smoke.test.js
+          npm run test:browser

@@ -9,3 +9,8 @@
 .DS_Store
 .idea/
 .vscode/
+
+# Local browser-test dependencies and reports.
+node_modules/
+test-results/
+playwright-report/

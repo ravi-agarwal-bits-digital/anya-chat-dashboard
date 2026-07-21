@@ -61,7 +61,7 @@ input:focus,select:focus{border-color:#b9c9df;box-shadow:0 0 0 4px rgba(47,100,1
 .metric .l{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:800;margin-top:8px}
 .footer{margin-top:22px;color:var(--muted);font-size:12px;line-height:1.7;text-align:center}
 #adminGate{min-height:100vh;display:grid;place-items:center;padding:24px}
-.gateCard{width:min(430px,94vw);background:#fff;border:1px solid var(--line);border-radius:30px;padding:34px;box-shadow:var(--shadow);text-align:center}
+.gateCard{width:100%;max-width:430px;background:#fff;border:1px solid var(--line);border-radius:30px;padding:34px;box-shadow:var(--shadow);text-align:center}
 .gateCard .logoBox{margin:0 auto 20px;width:190px}
 .gateCard h2{font-family:'Source Serif 4',serif;font-size:31px;letter-spacing:-.05em;color:var(--navy);margin-bottom:7px}
 @media(max-width:900px){
