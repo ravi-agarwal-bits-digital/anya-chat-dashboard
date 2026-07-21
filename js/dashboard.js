@@ -425,17 +425,19 @@ function computeManagementMetrics(){
   if(current.deltas.gap.cls==='up')current.deltas.gap.cls='down';else if(current.deltas.gap.cls==='down')current.deltas.gap.cls='up';
   return current;
 }
-function computeCommercialUsage(){
+function computeCommercialUsage(records=VIEW){
   const plan=COMMERCIAL_PLAN;
-  const billableConversations=RECORDS.reduce((total,r)=>total+Math.ceil(Math.max(0,Number(r.agentMsgs)||0)/plan.agentMessagesPerConversation),0);
-  const coverageDays=daysInclusive(DATA_MIN,DATA_MAX);
+  const billableConversations=records.reduce((total,r)=>total+Math.ceil(Math.max(0,Number(r.agentMsgs)||0)/plan.agentMessagesPerConversation),0);
+  const rawSessions=records.length;
+  const agentMessages=records.reduce((total,r)=>total+Math.max(0,Number(r.agentMsgs)||0),0);
+  const coverageDays=daysInclusive(RANGE.from,RANGE.to);
   const usedPct=plan.includedConversations?billableConversations/plan.includedConversations:0;
   const remaining=Math.max(0,plan.includedConversations-billableConversations);
   const projectedAnnual=coverageDays?Math.round(billableConversations/coverageDays*365):0;
   const projectedOverage=Math.max(0,projectedAnnual-plan.includedConversations);
   const projectedTopUps=projectedOverage?Math.ceil(projectedOverage/plan.overageBlockConversations):0;
   return {
-    ...plan,billableConversations,coverageDays,usedPct,remaining,projectedAnnual,projectedOverage,projectedTopUps,
+    ...plan,rawSessions,agentMessages,billableConversations,coverageDays,usedPct,remaining,projectedAnnual,projectedOverage,projectedTopUps,
     bundleAllocation:billableConversations/plan.includedConversations*plan.bundleCost,
     effectiveAllocation:billableConversations/plan.includedConversations*(plan.bundleCost+plan.platformCost)
   };
@@ -457,22 +459,25 @@ function secManagementSummary(){
     </div></div></section>`;
 }
 function secCommercialUsage(){
-  const c=computeCommercialUsage();
+  const c=computeCommercialUsage(VIEW);
   const projectedWithinPlan=c.projectedAnnual<=c.includedConversations;
   const fmtRupees=value=>`₹${Math.round(value).toLocaleString('en-IN')}`;
-  const coverage=c.coverageDays?`${fromKeyLabel(DATA_MIN)} – ${fromKeyLabel(DATA_MAX)} · ${c.coverageDays} calendar days`:'No dated chats available';
+  const coverage=c.coverageDays?`${selectedRangeText()} · ${c.coverageDays} calendar days`:'No dated chats available';
   const projectionText=projectedWithinPlan?`${(c.includedConversations-c.projectedAnnual).toLocaleString()} projected buffer`:`${c.projectedOverage.toLocaleString()} projected over plan`;
-  const projectionClass=projectedWithinPlan?'good':'risk';
-  return `<section id="sec-commercial"><div class="commercial-panel">
-    <div class="commercial-head"><div><div class="commercial-kicker">Conversation plan · all published data</div><h2>Commercial runway</h2><p>${esc(coverage)}. This counter is intentionally independent of the selected analytics date filter.</p></div><div class="commercial-status ${projectionClass}">${projectedWithinPlan?'Within annual plan':'Top-up likely'}<span>${projectionText}</span></div></div>
-    <div class="commercial-progress" aria-label="${c.billableConversations.toLocaleString()} of ${c.includedConversations.toLocaleString()} included conversations used"><div class="commercial-progress-top"><span><b>${c.billableConversations.toLocaleString()}</b> billable conversations used</span><span>${Math.round(c.usedPct*1000)/10}% of ${c.includedConversations.toLocaleString()} included</span></div><div class="commercial-track"><i style="width:${Math.min(100,c.usedPct*100)}%"></i></div><div class="commercial-progress-bottom"><span>${c.remaining.toLocaleString()} conversations remain</span><span>1 conversation = up to 5 user–Anya exchanges</span></div></div>
-    <div class="commercial-grid">
-      <div class="commercial-metric"><span>Annualised run rate</span><b>${c.projectedAnnual.toLocaleString()}</b><small>At the observed daily rate</small></div>
-      <div class="commercial-metric"><span>Bundle allocation used</span><b>${fmtRupees(c.bundleAllocation)}</b><small>Of the ₹2,00,000 conversation bundle</small></div>
-      <div class="commercial-metric"><span>Effective allocation</span><b>${fmtRupees(c.effectiveAllocation)}</b><small>Includes the ₹2,00,000 annual platform fee</small></div>
-      <div class="commercial-metric commercial-contract"><span>Contract terms</span><b>₹4,00,000<span class="commercial-year">/ year</span></b><small>65,000 conversations included · ₹1,00,000 per additional 25,000</small></div>
+  const bands=[['0 replies',r=>r.agentMsgs<=0],['1–5 replies',r=>r.agentMsgs>=1&&r.agentMsgs<=5],['6–10 replies',r=>r.agentMsgs>=6&&r.agentMsgs<=10],['11–15 replies',r=>r.agentMsgs>=11&&r.agentMsgs<=15],['16+ replies',r=>r.agentMsgs>=16]];
+  const bandData=bands.map(([label,test])=>{const records=VIEW.filter(test),units=records.reduce((total,r)=>total+Math.ceil(r.agentMsgs/c.agentMessagesPerConversation),0);return {label,records,units};});
+  const maxSessions=Math.max(1,...bandData.map(x=>x.records.length));
+  return `<section id="sec-commercial"><div class="shead"><span class="n">00</span><h2>Conversation plan</h2></div><div class="sdesc">Commercial usage follows the date filter above. Choose <b>All</b> for the full published-data plan view; click any card or billing band to inspect the underlying chats.</div><div class="panel plan-panel">
+    <div class="plan-head"><div><div class="plan-kicker">Commercial runway</div><h3>${projectedWithinPlan?'Within the annual plan':'Top-up likely at current run rate'}</h3><p>${esc(coverage)} · ${projectionText}.</p></div><div class="plan-contract"><b>₹4,00,000</b><span>annual commitment</span><small>65,000 conversations included</small></div></div>
+    <div class="plan-kpis">
+      <div class="plan-kpi clk" data-drill="commercial-all"><div class="plan-value">${c.rawSessions.toLocaleString()}</div><div class="plan-label">Raw exported sessions</div><div class="plan-note">Every dashboard chat before billing</div></div>
+      <div class="plan-kpi clk" data-drill="commercial-replies"><div class="plan-value">${c.agentMessages.toLocaleString()}</div><div class="plan-label">Recorded Anya replies</div><div class="plan-note">Raw <span class="mono">Agent Messages</span> total</div></div>
+      <div class="plan-kpi billable clk" data-drill="commercial-billable"><div class="plan-value">${c.billableConversations.toLocaleString()}</div><div class="plan-label">Billable conversations</div><div class="plan-note">Rounded up per session, not in total</div></div>
+      <div class="plan-kpi remaining"><div class="plan-value">${c.remaining.toLocaleString()}</div><div class="plan-label">Included balance</div><div class="plan-note">Of ${c.includedConversations.toLocaleString()} annual conversations</div></div>
     </div>
-    <div class="commercial-note"><b>How this is counted.</b> Each unique Chat ID is treated as one exported session. Billable conversations are calculated per session as <span class="mono">ceil(Anya replies ÷ 5)</span>; a five-exchange conversation contains up to five user and five Anya messages. The annualised figure extrapolates the published-data run rate and is not an invoice forecast.</div>
+    <div class="plan-progress" aria-label="${c.billableConversations.toLocaleString()} of ${c.includedConversations.toLocaleString()} included conversations used"><div><b>${Math.round(c.usedPct*1000)/10}% used</b><span>${c.billableConversations.toLocaleString()} billed · ${c.remaining.toLocaleString()} remaining</span></div><div class="track"><div class="seg one" style="width:${Math.min(100,c.usedPct*100)}%"></div></div></div>
+    <div class="plan-grid"><div class="plan-breakdown"><h4>What creates billable units</h4><div class="cap">Raw sessions by reply depth. Each band opens its underlying chats and can be exported from the drawer.</div>${bandData.map((x,i)=>`<div class="plan-band clk" data-drill="commercial-band" data-arg="${i}"><div><b>${x.label}</b><span>${x.records.length.toLocaleString()} raw sessions · ${x.units.toLocaleString()} billed</span></div><div class="track"><div class="seg ${i===0?'gap':i===1?'blu':'one'}" style="width:${Math.round(x.records.length/maxSessions*100)}%"></div></div></div>`).join('')}</div><div class="plan-projection"><div class="plan-kicker">Run-rate projection</div><b>${c.projectedAnnual.toLocaleString()}</b><span>projected annual conversations</span><p>Based on ${c.coverageDays.toLocaleString()} published calendar days. ${projectedWithinPlan?`That is ${(c.includedConversations-c.projectedAnnual).toLocaleString()} below the included plan.`:`That is ${c.projectedOverage.toLocaleString()} above plan; ${c.projectedTopUps} top-up block${c.projectedTopUps===1?'':'s'} would be needed at this run rate.`}</p><dl><div><dt>Bundle allocation</dt><dd>${fmtRupees(c.bundleAllocation)}</dd></div><div><dt>Effective allocation</dt><dd>${fmtRupees(c.effectiveAllocation)}</dd></div></dl></div></div>
+    <div class="plan-note-box"><b>Billing rule:</b> one conversation covers up to five user–Anya exchanges (ten messages). We calculate each exported session as <span class="mono">ceil(Anya replies ÷ 5)</span>. The projection is a run-rate estimate, not an invoice forecast.</div>
   </div></section>`;
 }
 function secActionQueue(){
@@ -723,6 +728,10 @@ function openDrill(kind,arg){
   const has=(r,th,blockedOnly)=>r.questions.some(q=>q.themes.includes(th)&&(!blockedOnly||q.gated||q.deflected));
   switch(kind){
     case'all':recs=VIEW;title="All chats";break;
+    case'commercial-all':recs=VIEW;title="Raw exported sessions";sub="Sessions in the selected date range before the billing rule";break;
+    case'commercial-replies':recs=VIEW.filter(r=>r.agentMsgs>0);title="Sessions with recorded Anya replies";sub="Underlying raw Agent Messages in the selected date range";break;
+    case'commercial-billable':recs=VIEW.filter(r=>r.agentMsgs>0);title="Billable conversation sessions";sub="Selected-range sessions contributing ceil(Anya replies ÷ 5) units";break;
+    case'commercial-band':{const bands=[r=>r.agentMsgs<=0,r=>r.agentMsgs>=1&&r.agentMsgs<=5,r=>r.agentMsgs>=6&&r.agentMsgs<=10,r=>r.agentMsgs>=11&&r.agentMsgs<=15,r=>r.agentMsgs>=16];recs=VIEW.filter(bands[Number(arg)]||(()=>false));title=['0 replies','1–5 replies','6–10 replies','11–15 replies','16+ replies'][Number(arg)]||'Billing depth';sub="Selected-range sessions in this billing-depth band";break;}
     case'engaged':recs=VIEW.filter(r=>r.engaged);title="Engaged chats";sub="Meaningful multi-turn prospect engagement";break;
     case'contact':recs=VIEW.filter(r=>r.contactCaptured);title="Contact captured";sub="A usable phone number or email was captured";break;
     case'callback':recs=VIEW.filter(r=>r.callbackBooked);title="Callback requests detected";break;

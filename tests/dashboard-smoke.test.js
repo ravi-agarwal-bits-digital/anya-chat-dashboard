@@ -106,12 +106,25 @@ assert.equal(regression.ok, true, 'built-in analytics regression fixture');
 const commercialUsage = vm.runInNewContext(`(()=>{
   RECORDS=[{agentMsgs:1},{agentMsgs:5},{agentMsgs:6},{agentMsgs:0}];
   DATA_MIN=20260701;DATA_MAX=20260710;
-  return computeCommercialUsage();
+  VIEW=RECORDS;
+  RANGE={mode:'custom',from:20260701,to:20260710};
+  return computeCommercialUsage(VIEW);
 })()`, dashboardSandbox);
 assert.equal(commercialUsage.billableConversations, 4, 'commercial usage rounds each chat session up to five Anya replies');
+assert.equal(commercialUsage.rawSessions, 4, 'commercial usage retains the raw exported-session count');
+assert.equal(commercialUsage.agentMessages, 12, 'commercial usage retains the raw Anya reply count');
 assert.equal(commercialUsage.remaining, 64996, 'commercial usage tracks remaining included conversations');
 assert.equal(commercialUsage.projectedAnnual, 146, 'commercial usage annualises from the dated source coverage');
+const filteredCommercialUsage = vm.runInNewContext(`(()=>{
+  VIEW=RECORDS.slice(0,2);
+  RANGE={mode:'custom',from:20260701,to:20260702};
+  return computeCommercialUsage(VIEW);
+})()`, dashboardSandbox);
+assert.equal(filteredCommercialUsage.rawSessions, 2, 'commercial usage follows the selected dashboard view');
+assert.equal(filteredCommercialUsage.billableConversations, 2, 'commercial billing totals recalculate for the selected dashboard view');
 assert.match(dashboardScript, /id="sec-commercial"/, 'dashboard renders the commercial runway section');
+assert.match(dashboardScript, /case'commercial-all'/, 'commercial raw-session cards open the existing drill-down drawer');
+assert.match(dashboardScript, /case'commercial-band'/, 'commercial billing bands open the existing drill-down drawer');
 
 const adminSandbox = {
   Date, Math, RegExp, Set, TextEncoder, Uint8Array, crypto: webcrypto,
