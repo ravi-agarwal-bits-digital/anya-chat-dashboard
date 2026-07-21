@@ -123,6 +123,7 @@ const filteredCommercialUsage = vm.runInNewContext(`(()=>{
 assert.equal(filteredCommercialUsage.rawSessions, 2, 'commercial usage follows the selected dashboard view');
 assert.equal(filteredCommercialUsage.billableConversations, 2, 'commercial billing totals recalculate for the selected dashboard view');
 assert.match(dashboardScript, /id="sec-commercial"/, 'dashboard renders the commercial runway section');
+assert.match(dashboardScript, /data-action="jump-commercial"/, 'CEO summary links to the commercial runway');
 assert.match(dashboardScript, /case'commercial-all'/, 'commercial raw-session cards open the existing drill-down drawer');
 assert.match(dashboardScript, /case'commercial-band'/, 'commercial billing bands open the existing drill-down drawer');
 

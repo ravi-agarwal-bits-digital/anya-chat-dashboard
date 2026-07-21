@@ -52,6 +52,7 @@ function bindDashboardEvents(){
   document.addEventListener('click',e=>{
     const action=e.target.closest('[data-action]');if(!action)return;
     if(action.dataset.action==='export-management-summary')exportManagementSummaryPDF();
+    else if(action.dataset.action==='jump-commercial')document.getElementById('sec-commercial')?.scrollIntoView({behavior:window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
     else if(action.dataset.action==='export-leads')exportLeads();
     else if(action.dataset.action==='export-callbacks')exportCallbacks();
     else if(action.dataset.action==='export-csv')exportCSV();
@@ -444,6 +445,7 @@ function computeCommercialUsage(records=VIEW){
 }
 function secManagementSummary(){
   const m=computeManagementMetrics(),riskClass=m.gapPct>=30?'risk':'good',priority=m.hot+m.warm;
+  const c=computeCommercialUsage(VIEW);
   const d=m.deltas;
   return `<section id="sec-management"><div class="panel management-panel">
     <div class="management-head"><div><div class="management-kicker">Management Summary</div><div class="management-title">CEO-ready view of chat demand</div><div class="management-range">${esc(selectedRangeText())} · ${m.n.toLocaleString()} chats across ${m.days} active day${m.days===1?'':'s'} · ${(window.DATA_QUALITY?.validRows||RECORDS.length).toLocaleString()} analysed</div></div><button class="management-export" data-action="export-management-summary">Export CEO Summary</button></div>
@@ -454,6 +456,7 @@ function secManagementSummary(){
       <div class="management-kpi gold"><div class="v">${m.cb.toLocaleString()}</div><div class="l">Callback requests</div><div class="delta ${d.callbacks.cls}">${d.callbacks.text}</div></div>
       <div class="management-kpi ${m.gapPct>=30?'risk':''}"><div class="v">${m.gapPct}%</div><div class="l">Answer gap</div><div class="delta ${d.gap.cls}">${d.gap.text}</div></div>
     </div>
+    <button type="button" class="management-commercial-brief" data-action="jump-commercial"><span>Commercial plan · selected range</span><b>${c.billableConversations.toLocaleString()} <em>/ ${c.includedConversations.toLocaleString()}</em></b><small>${c.rawSessions.toLocaleString()} raw sessions · ${Math.round(c.usedPct*1000)/10}% of annual allowance</small><i>View runway →</i></button>
     <div class="management-grid"><div class="management-story">Anya handled <b>${m.n.toLocaleString()} conversations</b>. Immediate operating priorities are <b>${m.cb.toLocaleString()} callback requests</b>, <b>${m.recoverable.toLocaleString()} high-intent chats without captured contact</b>, and <b>${priority} high-priority prospects</b>. Top demand is <b>${esc(m.topTheme[0])}</b>; the first knowledge improvement area is <span class="${riskClass}">${esc(m.highestRisk)}</span>.</div>
       <div class="management-points"><div class="management-point"><b>Call first</b><span>${m.cb.toLocaleString()} callback requests detected for counsellor review.</span></div><div class="management-point"><b>Recover next</b><span>${m.recoverable.toLocaleString()} high-intent conversations ended without usable contact details.</span></div><div class="management-point"><b>Fix knowledge</b><span>${m.gapPct}% answer-gap rate; start with ${esc(m.topGap[0])}.</span></div></div>
     </div></div></section>`;
