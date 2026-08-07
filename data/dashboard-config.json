@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "dataFile": "data/chat_analytics.xlsx",
   "sheetName": "Chats Export",
-  "lastPublishedAt": "2026-08-06T04:15:15.613Z",
-  "sourceFile": "chat_analytics_2026-08-06.xlsx",
-  "recordCount": 3766,
-  "fileSize": 2904997
+  "lastPublishedAt": "2026-08-07T03:14:45.697Z",
+  "sourceFile": "chat_analytics_2026-08-07.xlsx",
+  "recordCount": 3821,
+  "fileSize": 2943020
 }
