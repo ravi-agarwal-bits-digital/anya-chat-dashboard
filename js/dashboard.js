@@ -5,12 +5,14 @@ const CONFIG_FILE='data/dashboard-config.json';
 let DATA_FILE=DEFAULT_DATA_FILE;
 let SHEET=DEFAULT_SHEET;
 let PUBLISHED_AT='';
-let CONFIG_META={schemaVersion:0,sourceFile:'',recordCount:0,fileSize:0};
+let CONFIG_META={schemaVersion:0,sourceFile:'',recordCount:0,fileSize:0,vendorBilling:null};
+let BILLING_SOURCE_MATCH=false;
 const SECURITY={PASSWORD_HASH:"2f8f998b75f4bfd79e4b9a0760d82905cfbe1fccb942ecfd6d1e8999e04c021f",SESSION_TIMEOUT_MINS:30};
 const COMMERCIAL_PLAN=Object.freeze({includedConversations:65000,bundleCost:200000,platformCost:200000,overageBlockConversations:25000,overageBlockCost:100000,agentMessagesPerConversation:5});
 
 /* ---------- crypto / auth ---------- */
 async function sha256(t){const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');}
+async function sha256Bytes(bytes){const h=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');}
 async function checkPassword(){
   const pwd=$("loginPassword").value;
   if(!pwd){$("loginError").textContent="Enter the access password.";return;}
@@ -80,7 +82,7 @@ let CONFIG_PROMISE=null;
 async function loadDashboardConfig(){
   if(CONFIG_PROMISE)return CONFIG_PROMISE;
   DATA_FILE=DEFAULT_DATA_FILE;SHEET=DEFAULT_SHEET;PUBLISHED_AT='';
-  CONFIG_META={schemaVersion:0,sourceFile:'',recordCount:0,fileSize:0};
+  CONFIG_META={schemaVersion:0,sourceFile:'',recordCount:0,fileSize:0,vendorBilling:null};BILLING_SOURCE_MATCH=false;
   CONFIG_PROMISE=fetch(CONFIG_FILE,{cache:'no-store'}).then(r=>r.ok?r.json():null).then(cfg=>{
     if(!cfg||typeof cfg!=='object')return;
     const version=Number(cfg.schemaVersion||1);
@@ -92,7 +94,8 @@ async function loadDashboardConfig(){
       schemaVersion:version,
       sourceFile:typeof cfg.sourceFile==='string'?cfg.sourceFile.trim():'',
       recordCount:Number(cfg.recordCount)||0,
-      fileSize:Number(cfg.fileSize)||0
+      fileSize:Number(cfg.fileSize)||0,
+      vendorBilling:Number.isSafeInteger(cfg.vendorBilling?.conversations)&&cfg.vendorBilling.conversations>=0&&/^[a-f0-9]{64}$/.test(cfg.vendorBilling?.sourceSha256||'')?cfg.vendorBilling:null
     };
   }).catch(()=>{});
   return CONFIG_PROMISE;
@@ -109,11 +112,16 @@ function autoLoadExcel(){
   }).catch(()=>show('dataPlaceholder'));
 }
 function retryDataLoad(){window.DATA_LOADED=false;CONFIG_PROMISE=null;loadDashboardConfig().finally(autoLoadExcel);}
-function parseWorkbook(bytes){
+async function parseWorkbook(bytes){
   try{
+    let sourceHash='';
+    if(CONFIG_META.vendorBilling){try{sourceHash=await sha256Bytes(bytes);}catch(e){console.warn('Could not verify vendor billing source:',e);}}
     const wb=XLSX.read(bytes,{type:'array'});
     if(!wb.SheetNames.includes(SHEET)){show('dataPlaceholder');return;}
-    buildRecords(XLSX.utils.sheet_to_json(wb.Sheets[SHEET],{defval:""}));
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[SHEET],{defval:""});
+    BILLING_SOURCE_MATCH=false;
+    if(CONFIG_META.vendorBilling&&CONFIG_META.recordCount===rows.length&&CONFIG_META.fileSize===bytes.length)BILLING_SOURCE_MATCH=sourceHash===CONFIG_META.vendorBilling.sourceSha256;
+    buildRecords(rows);
     window.DATA_LOADED=true;show('mainWrap');initRangeBounds();render();renderMethod();
   }catch(e){show('dataPlaceholder');}
 }
@@ -428,7 +436,9 @@ function computeManagementMetrics(){
 }
 function computeCommercialUsage(records=VIEW){
   const plan=COMMERCIAL_PLAN;
-  const billableConversations=records.reduce((total,r)=>total+Math.ceil(Math.max(0,Number(r.agentMsgs)||0)/plan.agentMessagesPerConversation),0);
+  const estimatedConversations=records.reduce((total,r)=>total+Math.ceil(Math.max(0,Number(r.agentMsgs)||0)/plan.agentMessagesPerConversation),0);
+  const vendorActual=RANGE.mode==='all'&&records===VIEW&&records.length===RECORDS.length&&BILLING_SOURCE_MATCH;
+  const billableConversations=vendorActual?CONFIG_META.vendorBilling.conversations:estimatedConversations;
   const rawSessions=records.length;
   const agentMessages=records.reduce((total,r)=>total+Math.max(0,Number(r.agentMsgs)||0),0);
   const coverageDays=daysInclusive(RANGE.from,RANGE.to);
@@ -438,7 +448,7 @@ function computeCommercialUsage(records=VIEW){
   const projectedOverage=Math.max(0,projectedAnnual-plan.includedConversations);
   const projectedTopUps=projectedOverage?Math.ceil(projectedOverage/plan.overageBlockConversations):0;
   return {
-    ...plan,rawSessions,agentMessages,billableConversations,coverageDays,usedPct,remaining,projectedAnnual,projectedOverage,projectedTopUps,
+    ...plan,rawSessions,agentMessages,estimatedConversations,vendorActual,billableConversations,coverageDays,usedPct,remaining,projectedAnnual,projectedOverage,projectedTopUps,
     bundleAllocation:billableConversations/plan.includedConversations*plan.bundleCost,
     effectiveAllocation:billableConversations/plan.includedConversations*(plan.bundleCost+plan.platformCost)
   };
@@ -456,7 +466,7 @@ function secManagementSummary(){
       <div class="management-kpi gold"><div class="v">${m.cb.toLocaleString()}</div><div class="l">Callback requests</div><div class="delta ${d.callbacks.cls}">${d.callbacks.text}</div></div>
       <div class="management-kpi ${m.gapPct>=30?'risk':''}"><div class="v">${m.gapPct}%</div><div class="l">Answer gap</div><div class="delta ${d.gap.cls}">${d.gap.text}</div></div>
     </div>
-    <button type="button" class="management-commercial-brief" data-action="jump-commercial"><span>Commercial plan · selected range</span><b>${c.billableConversations.toLocaleString()} <em>/ ${c.includedConversations.toLocaleString()}</em></b><small>${c.rawSessions.toLocaleString()} raw sessions · ${Math.round(c.usedPct*1000)/10}% of annual allowance</small><i>View runway →</i></button>
+    <button type="button" class="management-commercial-brief" data-action="jump-commercial"><span>Commercial plan · ${c.vendorActual?'vendor total':'selected-range estimate'}</span><b>${c.billableConversations.toLocaleString()} <em>/ ${c.includedConversations.toLocaleString()}</em></b><small>${c.rawSessions.toLocaleString()} raw chats · ${Math.round(c.usedPct*1000)/10}% of annual allowance</small><i>View runway →</i></button>
     <div class="management-grid"><div class="management-story">Anya handled <b>${m.n.toLocaleString()} conversations</b>. Immediate operating priorities are <b>${m.cb.toLocaleString()} callback requests</b>, <b>${m.recoverable.toLocaleString()} high-intent chats without captured contact</b>, and <b>${priority} high-priority prospects</b>. Top demand is <b>${esc(m.topTheme[0])}</b>; the first knowledge improvement area is <span class="${riskClass}">${esc(m.highestRisk)}</span>.</div>
       <div class="management-points"><div class="management-point"><b>Call first</b><span>${m.cb.toLocaleString()} callback requests detected for counsellor review.</span></div><div class="management-point"><b>Recover next</b><span>${m.recoverable.toLocaleString()} high-intent conversations ended without usable contact details.</span></div><div class="management-point"><b>Fix knowledge</b><span>${m.gapPct}% answer-gap rate; start with ${esc(m.topGap[0])}.</span></div></div>
     </div></div></section>`;
@@ -475,12 +485,12 @@ function secCommercialUsage(){
     <div class="plan-kpis">
       <div class="plan-kpi clk" data-drill="commercial-all"><div class="plan-value">${c.rawSessions.toLocaleString()}</div><div class="plan-label">Raw exported sessions</div><div class="plan-note">Every dashboard chat before billing</div></div>
       <div class="plan-kpi clk" data-drill="commercial-replies"><div class="plan-value">${c.agentMessages.toLocaleString()}</div><div class="plan-label">Recorded Anya replies</div><div class="plan-note">Raw <span class="mono">Agent Messages</span> total</div></div>
-      <div class="plan-kpi billable clk" data-drill="commercial-billable"><div class="plan-value">${c.billableConversations.toLocaleString()}</div><div class="plan-label">Billable conversations</div><div class="plan-note">Rounded up per session, not in total</div></div>
+      <div class="plan-kpi billable clk" data-drill="commercial-billable"><div class="plan-value">${c.billableConversations.toLocaleString()}</div><div class="plan-label">${c.vendorActual?'Vendor-billed conversations':'Estimated conversations'}</div><div class="plan-note">${c.vendorActual?'Vendor total for this exact export':'Calculated from exported Anya replies'}</div></div>
       <div class="plan-kpi remaining"><div class="plan-value">${c.remaining.toLocaleString()}</div><div class="plan-label">Included balance</div><div class="plan-note">Of ${c.includedConversations.toLocaleString()} annual conversations</div></div>
     </div>
-    <div class="plan-progress" aria-label="${c.billableConversations.toLocaleString()} of ${c.includedConversations.toLocaleString()} included conversations used"><div><b>${Math.round(c.usedPct*1000)/10}% used</b><span>${c.billableConversations.toLocaleString()} billed · ${c.remaining.toLocaleString()} remaining</span></div><div class="track"><div class="seg one" style="width:${Math.min(100,c.usedPct*100)}%"></div></div></div>
-    <div class="plan-grid"><div class="plan-breakdown"><h4>What creates billable units</h4><div class="cap">Raw sessions by reply depth. Each band opens its underlying chats and can be exported from the drawer.</div>${bandData.map((x,i)=>`<div class="plan-band clk" data-drill="commercial-band" data-arg="${i}"><div><b>${x.label}</b><span>${x.records.length.toLocaleString()} raw sessions · ${x.units.toLocaleString()} billed</span></div><div class="track"><div class="seg ${i===0?'gap':i===1?'blu':'one'}" style="width:${Math.round(x.records.length/maxSessions*100)}%"></div></div></div>`).join('')}</div><div class="plan-projection"><div class="plan-kicker">Run-rate projection</div><b>${c.projectedAnnual.toLocaleString()}</b><span>projected annual conversations</span><p>Based on ${c.coverageDays.toLocaleString()} published calendar days. ${projectedWithinPlan?`That is ${(c.includedConversations-c.projectedAnnual).toLocaleString()} below the included plan.`:`That is ${c.projectedOverage.toLocaleString()} above plan; ${c.projectedTopUps} top-up block${c.projectedTopUps===1?'':'s'} would be needed at this run rate.`}</p><dl><div><dt>Conversation allowance used</dt><dd>${fmtRupees(c.bundleAllocation)}<small>of the ₹2,00,000 conversation plan</small></dd></div><div><dt>All-in usage value</dt><dd>${fmtRupees(c.effectiveAllocation)}<small>adds a proportional share of the fixed platform fee</small></dd></div></dl><div class="plan-cost-note"><b>Not an extra bill.</b> ₹4,00,000 is the annual commitment already made; these figures only show how much of that plan the selected usage represents.</div></div></div>
-    <div class="plan-note-box"><b>Billing rule:</b> one conversation covers up to five user–Anya exchanges (ten messages). We calculate each exported session as <span class="mono">ceil(Anya replies ÷ 5)</span>. The projection is a run-rate estimate, not an invoice forecast.</div>
+    <div class="plan-progress" aria-label="${c.billableConversations.toLocaleString()} of ${c.includedConversations.toLocaleString()} included conversations used"><div><b>${Math.round(c.usedPct*1000)/10}% used</b><span>${c.billableConversations.toLocaleString()} ${c.vendorActual?'vendor-billed':'estimated'} · ${c.remaining.toLocaleString()} remaining</span></div><div class="track"><div class="seg one" style="width:${Math.min(100,c.usedPct*100)}%"></div></div></div>
+    <div class="plan-grid"><div class="plan-breakdown"><h4>Export-based estimate by reply depth</h4><div class="cap">Raw chats by Anya replies. Each band opens its underlying chats and can be exported from the drawer.</div>${bandData.map((x,i)=>`<div class="plan-band clk" data-drill="commercial-band" data-arg="${i}"><div><b>${x.label}</b><span>${x.records.length.toLocaleString()} raw chats · ${x.units.toLocaleString()} estimated units</span></div><div class="track"><div class="seg ${i===0?'gap':i===1?'blu':'one'}" style="width:${Math.round(x.records.length/maxSessions*100)}%"></div></div></div>`).join('')}</div><div class="plan-projection"><div class="plan-kicker">Run-rate projection</div><b>${c.projectedAnnual.toLocaleString()}</b><span>projected annual conversations</span><p>Based on ${c.coverageDays.toLocaleString()} published calendar days. ${projectedWithinPlan?`That is ${(c.includedConversations-c.projectedAnnual).toLocaleString()} below the included plan.`:`That is ${c.projectedOverage.toLocaleString()} above plan; ${c.projectedTopUps} top-up block${c.projectedTopUps===1?'':'s'} would be needed at this run rate.`}</p><dl><div><dt>Conversation allowance used</dt><dd>${fmtRupees(c.bundleAllocation)}<small>of the ₹2,00,000 conversation plan</small></dd></div><div><dt>All-in usage value</dt><dd>${fmtRupees(c.effectiveAllocation)}<small>adds a proportional share of the fixed platform fee</small></dd></div></dl><div class="plan-cost-note"><b>Not an extra bill.</b> ₹4,00,000 is the annual commitment already made; these figures only show how much of that plan the selected usage represents.</div></div></div>
+    <div class="plan-note-box"><b>Billing rule:</b> up to five user–Anya exchanges per billed conversation; ten minutes of inactivity starts a new session. ${c.vendorActual?`The vendor reports ${c.billableConversations.toLocaleString()} for this workbook, ${Math.abs(c.billableConversations-c.estimatedConversations).toLocaleString()} ${c.billableConversations>=c.estimatedConversations?'above':'below'} the ${c.estimatedConversations.toLocaleString()} export-based estimate.`:`This selected range shows the export-based estimate of ${c.estimatedConversations.toLocaleString()} units.`} The export has no message timestamps, so its <span class="mono">ceil(Anya replies ÷ 5)</span> estimate cannot reproduce inactivity splits. The projection is a run-rate estimate, not an invoice forecast.</div>
   </div></section>`;
 }
 function secActionQueue(){
@@ -749,7 +759,7 @@ function openDrill(kind,arg){
     case'all':recs=VIEW;title="All chats";break;
     case'commercial-all':recs=VIEW;title="Raw exported sessions";sub="Sessions in the selected date range before the billing rule";break;
     case'commercial-replies':recs=VIEW.filter(r=>r.agentMsgs>0);title="Sessions with recorded Anya replies";sub="Underlying raw Agent Messages in the selected date range";break;
-    case'commercial-billable':recs=VIEW.filter(r=>r.agentMsgs>0);title="Billable conversation sessions";sub="Selected-range sessions contributing ceil(Anya replies ÷ 5) units";break;
+    case'commercial-billable':recs=VIEW.filter(r=>r.agentMsgs>0);title="Chats behind the export estimate";sub="These chats explain the reply-based estimate; vendor inactivity splits cannot be traced without message timestamps";break;
     case'commercial-band':{const bands=[r=>r.agentMsgs<=0,r=>r.agentMsgs>=1&&r.agentMsgs<=5,r=>r.agentMsgs>=6&&r.agentMsgs<=10,r=>r.agentMsgs>=11&&r.agentMsgs<=15,r=>r.agentMsgs>=16];recs=VIEW.filter(bands[Number(arg)]||(()=>false));title=['0 replies','1–5 replies','6–10 replies','11–15 replies','16+ replies'][Number(arg)]||'Billing depth';sub="Selected-range sessions in this billing-depth band";break;}
     case'engaged':recs=VIEW.filter(r=>r.engaged);title="Engaged chats";sub="Meaningful multi-turn prospect engagement";break;
     case'contact':recs=VIEW.filter(r=>r.contactCaptured);title="Contact captured";sub="A usable phone number or email was captured";break;

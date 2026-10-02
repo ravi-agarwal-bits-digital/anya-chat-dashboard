@@ -78,7 +78,7 @@ async function verifyAdminBindings() {
   const dropZone = makeNode();
   const fileInput = makeNode();
   const publishConfirm = makeNode();
-  const nodes = {adminPassword, gateStatus, unlockAdminBtn: unlockButton, dropZone, fileInput, publishConfirm, sheet: makeNode(), path: makeNode(), configPath: makeNode(), publishBtn: makeNode(), saveConnectionSettingsBtn: makeNode(), clearSessionTokenBtn: makeNode()};
+  const nodes = {adminPassword, gateStatus, unlockAdminBtn: unlockButton, dropZone, fileInput, publishConfirm, vendorBillableConversations: makeNode(), sheet: makeNode(), path: makeNode(), configPath: makeNode(), publishBtn: makeNode(), saveConnectionSettingsBtn: makeNode(), clearSessionTokenBtn: makeNode()};
   const window = makeWindow();
   const document = makeDocument(nodes, {'#adminGate .logoBox img': makeNode({attributes: {src: '../assets/bits-pilani-digital-logo.jpg'}}), '[data-brand-logo][]': []});
   const sandbox = {

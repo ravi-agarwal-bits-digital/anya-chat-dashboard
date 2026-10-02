@@ -5,5 +5,9 @@
   "lastPublishedAt": "2026-10-02T20:29:21.843Z",
   "sourceFile": "chat_analytics_2026-10-02.xlsx",
   "recordCount": 5853,
-  "fileSize": 4324864
+  "fileSize": 4324864,
+  "vendorBilling": {
+    "conversations": 8819,
+    "sourceSha256": "2b0fb1574470c86ac0fc99297223bf35fe8b74cd3c0ab1f2d1852d7fad2abbff"
+  }
 }

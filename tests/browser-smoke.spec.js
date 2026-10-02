@@ -88,3 +88,29 @@ test('programme drill-down opens and restores keyboard focus in a real browser',
   await expect(programmeRow).toBeFocused();
   await expectNoHorizontalOverflow(page);
 });
+
+test('billing reconciliation and admin vendor input fit mobile', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844});
+  await page.goto(`${baseURL}/`);
+  await page.evaluate(() => {
+    RECORDS = [{agentMsgs:1,key:20260701},{agentMsgs:6,key:20260702}];
+    VIEW = RECORDS;
+    RANGE = {mode:'all',from:20260701,to:20260702};
+    CONFIG_META.vendorBilling = {conversations:9,sourceSha256:'a'.repeat(64)};
+    BILLING_SOURCE_MATCH = true;
+    document.getElementById('dashboardContent').style.display = 'block';
+    document.getElementById('mainWrap').style.display = 'block';
+    document.getElementById('report').innerHTML = secCommercialUsage();
+  });
+  await expect(page.getByText('Vendor-billed conversations')).toBeVisible();
+  await expect(page.locator('.plan-note-box')).toContainText('3 export-based estimate');
+  await expectNoHorizontalOverflow(page);
+
+  await page.goto(`${baseURL}/admin/`);
+  await page.evaluate(() => {
+    document.getElementById('adminGate').classList.add('hidden');
+    document.getElementById('adminApp').classList.remove('hidden');
+  });
+  await expect(page.getByLabel('Vendor-billed conversations (optional)')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});

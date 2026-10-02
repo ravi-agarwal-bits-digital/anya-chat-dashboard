@@ -13,6 +13,7 @@ const ADMIN_PASSPHRASE_KEY='anya_chat_admin_passphrase_session_v2';
 let ADMIN_PASSPHRASE='';
 let selectedFile=null;
 let selectedFileBytes=null;
+let selectedFileSha256='';
 let validationInfo=null;
 const $=id=>document.getElementById(id);
 function showStatus(id,msg,type='warn'){const el=$(id);if(!el)return;el.className='status '+type;el.innerHTML=msg;el.classList.remove('hidden');}
@@ -38,6 +39,7 @@ async function unlockAdmin(){
   ADMIN_PASSPHRASE=pwd;clearAdminPassphraseSession();showAdminApp();
 }
 function bytesToBase64(bytes){let binary='';const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk){binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));}return btoa(binary);}
+async function sha256Bytes(bytes){const hash=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');}
 function base64ToBytes(b64){const bin=atob(b64);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
 async function deriveKey(passphrase,salt,usage){const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},baseKey,{name:'AES-GCM',length:256},false,usage);}
 async function encryptBytes(bytes,passphrase,magic=DATA_MAGIC){const salt=crypto.getRandomValues(new Uint8Array(16));const iv=crypto.getRandomValues(new Uint8Array(12));const key=await deriveKey(passphrase,salt,['encrypt']);const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes));const head=new TextEncoder().encode(magic);const out=new Uint8Array(head.length+salt.length+iv.length+ct.length);out.set(head,0);out.set(salt,head.length);out.set(iv,head.length+salt.length);out.set(ct,head.length+salt.length+iv.length);return out;}
@@ -49,12 +51,14 @@ function setupUpload(){
   dz.addEventListener('click',()=>fi.click());
   dz.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click();}});
   $('publishConfirm').addEventListener('change',updatePublishReady);
+  $('vendorBillableConversations').addEventListener('input',updatePublishReady);
   ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('over');}));
   ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('over');}));
   dz.addEventListener('drop',e=>{if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0]);});
   ['sheet','path','configPath'].forEach(id=>{const el=$(id);if(el)el.addEventListener('change',()=>{if(selectedFile)setFile(selectedFile);});});
 }
-function updatePublishReady(){$('publishBtn').disabled=!(selectedFile&&selectedFileBytes&&validationInfo&&$('publishConfirm').checked);}
+function vendorBillingCount(){const value=$('vendorBillableConversations').value.trim();if(!value)return null;const count=Number(value);if(!Number.isSafeInteger(count)||count<0)throw new Error('Enter a whole, non-negative vendor-billed conversation count.');return count;}
+function updatePublishReady(){let validBilling=true;try{vendorBillingCount();}catch(e){validBilling=false;}$('publishBtn').disabled=!(selectedFile&&selectedFileBytes&&validationInfo&&$('publishConfirm').checked&&validBilling);}
 const DASHBOARD_MONTHS=new Set(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']);
 function hasDashboardDate(value){
   const m=String(value||'').match(/(\d{1,2})\s+(\w{3})\s+(\d{4}),\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
@@ -78,7 +82,8 @@ function qualityStatus(quality){
   return 'Data quality: <b>'+quality.usableRows.toLocaleString('en-IN')+'</b> usable chats · '+quality.invalidDates.toLocaleString('en-IN')+' unrecognised timestamp'+(quality.invalidDates===1?'':'s')+' · '+quality.blankConversations.toLocaleString('en-IN')+' blank conversation'+(quality.blankConversations===1?'':'s')+' · '+quality.duplicates.toLocaleString('en-IN')+' duplicate row'+(quality.duplicates===1?'':'s')+' (dashboard skips duplicates).';
 }
 async function setFile(file){
-  selectedFile=file||null;selectedFileBytes=null;validationInfo=null;$('publishConfirm').checked=false;$('publishConfirm').disabled=true;updatePublishReady();hideStatus('publishStatus');hideStatus('fileStatus');
+  if(file!==selectedFile)$('vendorBillableConversations').value='';
+  selectedFile=file||null;selectedFileBytes=null;selectedFileSha256='';validationInfo=null;$('publishConfirm').checked=false;$('publishConfirm').disabled=true;updatePublishReady();hideStatus('publishStatus');hideStatus('fileStatus');
   $('fileName').textContent='';$('fileName').classList.add('hidden');$('fileSize').textContent='—';$('sheetStatus').textContent='—';$('rowCount').textContent='—';
   if(!file)return;
   $('fileName').textContent=file.name;$('fileName').classList.remove('hidden');$('fileSize').textContent=formatSize(file.size);
@@ -111,6 +116,7 @@ async function validateWorkbook(file){
   if(!quality.nonBlankConversations)throw new Error('Every "Full Conversation" value is blank. Upload an export with chat conversations.');
   if(!quality.usableRows)throw new Error('No usable chats were found. At least one row needs both a recognised chat timestamp and a non-blank conversation.');
   selectedFileBytes=raw;
+  selectedFileSha256=await sha256Bytes(raw);
   return {rows:rows.length,sheet,headers:headers.length,quality};
 }
 function currentMode(){return document.querySelector('input[name="tokenMode"]:checked')?.value||'session';}
@@ -139,7 +145,7 @@ function requireSettings(){
   return s;
 }
 function buildDashboardConfig(settings){
-  return {
+  const config={
     schemaVersion:CONFIG_SCHEMA_VERSION,
     dataFile:settings.path,
     sheetName:settings.sheet,
@@ -148,6 +154,9 @@ function buildDashboardConfig(settings){
     recordCount:validationInfo?validationInfo.rows:0,
     fileSize:selectedFile?selectedFile.size:0
   };
+  const vendorCount=vendorBillingCount();
+  if(vendorCount!==null)config.vendorBilling={conversations:vendorCount,sourceSha256:selectedFileSha256};
+  return config;
 }
 function jsonToBase64(value){return bytesToBase64(new TextEncoder().encode(JSON.stringify(value,null,2)+'\n'));}
 function encodePath(path){return String(path).split('/').map(encodeURIComponent).join('/');}
@@ -173,6 +182,7 @@ async function publishData(){
   try{
     if(!selectedFile||!selectedFileBytes)throw new Error('Select and validate a chat Excel file first.');
     if(!$('publishConfirm').checked)throw new Error('Review the validation summary and confirm the production replacement first.');
+    if(vendorBillingCount()!==null&&!getConnectionSettings().writeConfig)throw new Error('Publish dashboard configuration to include the vendor-billed total.');
     const s=requireSettings();
     let token=$('token').value.trim()||sessionStorage.getItem(SESSION_TOKEN_KEY)||'';
     if(!token)throw new Error('Enter a GitHub fine-grained token or unlock a saved encrypted token.');

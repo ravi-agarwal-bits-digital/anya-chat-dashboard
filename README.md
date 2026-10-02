@@ -13,7 +13,7 @@ The dashboard is intentionally static: data is decrypted in the browser and no e
 
 ## Conversation-plan runway
 
-The dashboard’s Commercial Runway uses the agreed contract: 65,000 included conversations annually, a ₹2,00,000 conversation bundle, a ₹2,00,000 annual platform fee, and ₹1,00,000 per additional 25,000 conversations. It calculates billable conversations as `ceil(Agent Messages / 5)` for each unique exported session, reflecting up to five user–Anya exchanges per billable conversation. The annualised figure uses the all-time published-data run rate and is an estimate, not an invoice.
+The dashboard’s Commercial Runway uses the agreed contract: 65,000 included conversations annually, a ₹2,00,000 conversation bundle, a ₹2,00,000 annual platform fee, and ₹1,00,000 per additional 25,000 conversations. The vendor closes a session after ten minutes of inactivity and bills each group of up to five exchanges. The export has no per-message timestamps, so `ceil(Agent Messages / 5)` per chat is only an estimate and cannot reproduce the vendor's session splits. For a full-range view, the admin may enter the vendor's cumulative billed total when publishing the matching workbook. The dashboard verifies the workbook SHA-256 before using that total for runway and allowance figures; filtered views remain estimates. A later upload without a new vendor total clears the old actual. Annualised figures are run-rate estimates, not invoice forecasts.
 
 ## Workbook contract
 

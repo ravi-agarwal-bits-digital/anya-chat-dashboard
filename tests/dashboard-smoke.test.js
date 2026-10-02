@@ -66,7 +66,7 @@ for (const asset of ['assets/favicon.png', 'assets/bits-pilani-digital-logo.jpg'
 assert.match(dashboardScript, /const ENC_MAGIC="AANYAENC1"/, 'dashboard encryption compatibility marker');
 assert.match(dashboardScript, /includedConversations:65000/, 'dashboard commercial plan includes the contracted conversation allowance');
 assert.match(dashboardScript, /overageBlockConversations:25000/, 'dashboard commercial plan includes the contracted top-up block');
-assert.match(dashboardScript, /Math\.ceil\(Math\.max\(0,Number\(r\.agentMsgs\)\|\|0\)\/plan\.agentMessagesPerConversation\)/, 'billable conversations round up per session, not across all rows');
+assert.match(dashboardScript, /Math\.ceil\(Math\.max\(0,Number\(r\.agentMsgs\)\|\|0\)\/plan\.agentMessagesPerConversation\)/, 'export estimate rounds up per chat, not across all rows');
 assert.doesNotMatch(dashboardScript, /sessionStorage\.setItem\('dk'/, 'dashboard must not persist its passphrase');
 assert.doesNotMatch(dashboardScript, /sessionStorage\.clear\(\)/, 'dashboard lock must not clear unrelated session state');
 assert.match(admin, /href="\.\.\/css\/admin\.css"/, 'admin stylesheet link');
@@ -110,11 +110,23 @@ const commercialUsage = vm.runInNewContext(`(()=>{
   RANGE={mode:'custom',from:20260701,to:20260710};
   return computeCommercialUsage(VIEW);
 })()`, dashboardSandbox);
-assert.equal(commercialUsage.billableConversations, 4, 'commercial usage rounds each chat session up to five Anya replies');
+assert.equal(commercialUsage.billableConversations, 4, 'export estimate rounds each chat up to five Anya replies');
 assert.equal(commercialUsage.rawSessions, 4, 'commercial usage retains the raw exported-session count');
 assert.equal(commercialUsage.agentMessages, 12, 'commercial usage retains the raw Anya reply count');
 assert.equal(commercialUsage.remaining, 64996, 'commercial usage tracks remaining included conversations');
 assert.equal(commercialUsage.projectedAnnual, 146, 'commercial usage annualises from the dated source coverage');
+const vendorCommercialUsage = vm.runInNewContext(`(()=>{
+  CONFIG_META.vendorBilling={conversations:9,sourceSha256:'a'.repeat(64)};
+  BILLING_SOURCE_MATCH=true;
+  RANGE={mode:'all',from:20260701,to:20260710};
+  return computeCommercialUsage(VIEW);
+})()`, dashboardSandbox);
+assert.equal(vendorCommercialUsage.billableConversations, 9, 'verified full-range vendor total drives runway');
+assert.equal(vendorCommercialUsage.estimatedConversations, 4, 'export estimate remains visible for reconciliation');
+assert.equal(vendorCommercialUsage.remaining, 64991, 'allowance uses verified vendor total');
+const vendorCommercialHtml = vm.runInNewContext('secCommercialUsage()', dashboardSandbox);
+assert.match(vendorCommercialHtml, /Vendor-billed conversations/, 'verified vendor total is labelled as vendor-sourced');
+assert.match(vendorCommercialHtml, /export-based estimate/, 'vendor total remains distinguishable from the export estimate');
 const filteredCommercialUsage = vm.runInNewContext(`(()=>{
   VIEW=RECORDS.slice(0,2);
   RANGE={mode:'custom',from:20260701,to:20260702};
@@ -122,6 +134,14 @@ const filteredCommercialUsage = vm.runInNewContext(`(()=>{
 })()`, dashboardSandbox);
 assert.equal(filteredCommercialUsage.rawSessions, 2, 'commercial usage follows the selected dashboard view');
 assert.equal(filteredCommercialUsage.billableConversations, 2, 'commercial billing totals recalculate for the selected dashboard view');
+assert.equal(filteredCommercialUsage.vendorActual, false, 'vendor cumulative total is never applied to filtered views');
+const unmatchedCommercialUsage = vm.runInNewContext(`(()=>{
+  BILLING_SOURCE_MATCH=false;
+  VIEW=RECORDS;
+  RANGE={mode:'all',from:20260701,to:20260710};
+  return computeCommercialUsage(VIEW);
+})()`, dashboardSandbox);
+assert.equal(unmatchedCommercialUsage.billableConversations, 4, 'stale vendor actual is ignored for a different workbook');
 assert.match(dashboardScript, /id="sec-commercial"/, 'dashboard renders the commercial runway section');
 assert.match(dashboardScript, /data-action="jump-commercial"/, 'CEO summary links to the commercial runway');
 assert.match(dashboardScript, /case'commercial-all'/, 'commercial raw-session cards open the existing drill-down drawer');

@@ -41,5 +41,20 @@ assert.equal(adminSessionKeys.has('anya_chat_admin_auth_time_v2') || adminSessio
 assert.equal(adminSessionKeys.has('anya_chat_admin_github_token_session_v2'), true, 'admin preserves the user-selected session token');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'10 Jul 2026, 10:30:00 AM IST','Chat ID':'chat-1','Full Conversation':'User: Hello'}]).usableRows", sandbox), 1, 'dashboard-compatible usable chat quality detection');
 assert.equal(vm.runInNewContext("assessWorkbookQuality([{'Chat Created At (IST)':'not a date','Chat ID':'chat-1','Full Conversation':''}]).usableRows", sandbox), 0, 'unusable chat quality detection');
+const vendorInput = {value:'8819'};
+sandbox.document.getElementById = id => id==='vendorBillableConversations'?vendorInput:null;
+assert.equal(vm.runInNewContext('vendorBillingCount()', sandbox), 8819, 'admin accepts a whole vendor count');
+vendorInput.value='8.5';
+assert.throws(() => vm.runInNewContext('vendorBillingCount()', sandbox), /whole, non-negative/, 'admin rejects fractional vendor counts');
+vendorInput.value='';
+assert.equal(vm.runInNewContext('vendorBillingCount()', sandbox), null, 'blank vendor count clears the prior actual on publish');
+vendorInput.value='8819';
+const billingConfig = vm.runInNewContext(`(()=>{
+  selectedFile={name:'chat_analytics_2026-10-02.xlsx',size:4324864};
+  selectedFileSha256='a'.repeat(64);
+  validationInfo={rows:5853};
+  return buildDashboardConfig({path:'data/chat_analytics.xlsx',sheet:'Chats Export'});
+})()`, sandbox);
+assert.deepEqual(JSON.parse(JSON.stringify(billingConfig.vendorBilling)), {conversations:8819,sourceSha256:'a'.repeat(64)}, 'admin binds vendor total to the published workbook hash');
 
 console.log('admin smoke checks passed');
